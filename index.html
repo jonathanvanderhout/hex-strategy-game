@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagon Terrain Map with Trains</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            cursor: grab;
+        }
+        canvas:active {
+            cursor: grabbing;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .terrain-key {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .terrain-item {
+            display: flex;
+            align-items: center;
+            margin: 3px 0;
+        }
+        .terrain-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #666;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .mode-button {
+            background: #444;
+            color: white;
+            border: 2px solid #666;
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .mode-button.active {
+            background: #ffcc00;
+            color: #000;
+            border-color: #ffcc00;
+        }
+        .mode-button:hover {
+            background: #555;
+        }
+        .mode-button.active:hover {
+            background: #ffd700;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="hexCanvas"></canvas>
+    <div id="info">
+        <div>Drag to move | Scroll to zoom | Click edges to place tracks</div>
+        <div>Map tiles: <span id="tileCount">0</span></div>
+        <div>Zoom: <span id="zoomLevel">100</span>%</div>
+        <div>Tracks placed: <span id="trackCount">0</span></div>
+        <div class="terrain-key">
+            <div class="terrain-item"><div class="terrain-color" style="background: #4a9eff;"></div>Water</div>
+            <div class="terrain-item"><div class="terrain-color" style="background: #f4e4a6;"></div>Sand</div>
+            <div class="terrain-item"><div class="terrain-color" style="background: #7bc950;"></div>Grass</div>
+            <div class="terrain-item"><div class="terrain-color" style="background: #2d5016;"></div>Forest</div>
+            <div class="terrain-item"><div class="terrain-color" style="background: #8b7355;"></div>Mountain</div>
+        </div>
+    </div>
+    <div id="controls">
+        <div style="margin-bottom: 8px; font-weight: bold;">Mode:</div>
+        <button class="mode-button active" data-mode="place">🚂 Place Track</button>
+        <button class="mode-button" data-mode="remove">❌ Remove Track</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('hexCanvas');
+        const ctx = canvas.getContext('2d');
+        const tileCountEl = document.getElementById('tileCount');
+        const zoomLevelEl = document.getElementById('zoomLevel');
+        const trackCountEl = document.getElementById('trackCount');
+
+        // Hexagon parameters for FLAT-TOP orientation
+        const baseSize = 30;
+        let size = baseSize;
+        let width = size * 2;
+        let height = Math.sqrt(3) * size;
+        
+        // Zoom parameters
+        let zoom = 1.0;
+        const minZoom = 0.3;
+        const maxZoom = 3.0;
+        const zoomSpeed = 0.1;
+        
+        // Interaction state
+        let hoveredElement = null;
+        let currentMode = 'place'; // 'place' or 'remove'
+        
+        // Terrain types
+        const TERRAIN = {
+            WATER: { color: '#4a9eff', name: 'Water' },
+            SAND: { color: '#f4e4a6', name: 'Sand' },
+            GRASS: { color: '#7bc950', name: 'Grass' },
+            FOREST: { color: '#2d5016', name: 'Forest' },
+            MOUNTAIN: { color: '#8b7355', name: 'Mountain' }
+        };
+
+        // Object types that can be placed on the map
+        const OBJECT_TYPES = {
+            TRACK: 'track',
+        };
+
+        // Map data structure - stores hex tiles
+        const map = {};
+        
+        // Objects data structure - stores placed objects
+        // Edge key format: "edge_${col1}_${row1}_${col2}_${row2}" (sorted)
+        // Vertex key format: "vertex_${col1}_${row1}_${col2}_${row2}_${col3}_${row3}" (sorted)
+        const objects = {};
+        
+        // Camera position
+        let camera = { x: 0, y: 0 };
+        let isDragging = false;
+        let lastMousePos = { x: 0, y: 0 };
+
+        // Update size based on zoom
+        function updateSizeFromZoom() {
+            size = baseSize * zoom;
+            width = size * 2;
+            height = Math.sqrt(3) * size;
+        }
+
+        // Generate a hex key
+        function getHexKey(col, row) {
+            return `${col},${row}`;
+        }
+
+        // Get the neighbor hex for a given side (flat-top orientation)
+        // Side numbering: 0=right, 1=top-right, 2=top-left, 3=left, 4=bottom-left, 5=bottom-right
+        function getNeighbor(col, row, side) {
+            const isOdd = col % 2 !== 0;
+            
+            const neighbors = isOdd ? [
+                [col + 1, row],      // 0: right
+                [col, row - 1],      // 1: top-right
+                [col - 1, row - 1],  // 2: top-left
+                [col - 1, row],      // 3: left
+                [col - 1, row + 1],  // 4: bottom-left
+                [col, row + 1]       // 5: bottom-right
+            ] : [
+                [col + 1, row],      // 0: right
+                [col + 1, row - 1],  // 1: top-right
+                [col, row - 1],      // 2: top-left
+                [col - 1, row],      // 3: left
+                [col, row + 1],      // 4: bottom-left
+                [col + 1, row + 1]   // 5: bottom-right
+            ];
+            
+            return { col: neighbors[side][0], row: neighbors[side][1] };
+        }
+
+        // Get the three hexes that meet at a vertex
+        // Vertex numbering: 0=right, 1=top-right, 2=top-left, 3=left, 4=bottom-left, 5=bottom-right
+        function getVertexHexes(col, row, vertexIndex) {
+            const hex1 = { col, row };
+            
+            // Each vertex is shared by 3 hexes
+            // The vertex is between two edges of the current hex
+            const edge1 = vertexIndex;
+            const edge2 = (vertexIndex + 5) % 6; // Previous edge (counterclockwise)
+            
+            const hex2 = getNeighbor(col, row, edge1);
+            const hex3 = getNeighbor(col, row, edge2);
+            
+            return [hex1, hex2, hex3];
+        }
+
+        // Create a canonical edge key from two hex coordinates
+        function createEdgeKey(col1, row1, col2, row2) {
+            // Sort to ensure consistent key regardless of order
+            if (col1 < col2 || (col1 === col2 && row1 < row2)) {
+                return `edge_${col1}_${row1}_${col2}_${row2}`;
+            } else {
+                return `edge_${col2}_${row2}_${col1}_${row1}`;
+            }
+        }
+
+        // Create a canonical vertex key from three hex coordinates
+        function createVertexKey(hexes) {
+            // Sort all three hexes to ensure consistent key
+            const sorted = hexes.sort((a, b) => {
+                if (a.col !== b.col) return a.col - b.col;
+                return a.row - b.row;
+            });
+            
+            return `vertex_${sorted[0].col}_${sorted[0].row}_${sorted[1].col}_${sorted[1].row}_${sorted[2].col}_${sorted[2].row}`;
+        }
+
+        // Get edge key for a hex and side
+        function getEdgeKeyFromHexSide(col, row, side) {
+            const neighbor = getNeighbor(col, row, side);
+            return createEdgeKey(col, row, neighbor.col, neighbor.row);
+        }
+
+        // Get vertex key for a hex and vertex index
+        function getVertexKeyFromHex(col, row, vertexIndex) {
+            const hexes = getVertexHexes(col, row, vertexIndex);
+            return createVertexKey(hexes);
+        }
+
+        // Add an object to the map
+        function addObject(key, objectData) {
+            objects[key] = objectData;
+        }
+
+        // Remove an object from the map
+        function removeObject(key) {
+            delete objects[key];
+        }
+
+        // Get object at a location
+        function getObject(key) {
+            return objects[key] || null;
+        }
+
+        // Simple noise-like function for terrain generation
+        function pseudoNoise(col, row) {
+            let x = col * 0.1;
+            let y = row * 0.1;
+            return (Math.sin(x * 3.5 + y * 2.1) + Math.sin(x * 2.3 - y * 1.7) + Math.sin(x * 1.1 + y * 3.3)) / 3;
+        }
+
+        // Generate terrain for a hex
+        function generateTerrain(col, row) {
+            const noise = pseudoNoise(col, row);
+            
+            if (noise < -0.5) return TERRAIN.WATER;
+            if (noise < -0.2) return TERRAIN.SAND;
+            if (noise < 0.3) return TERRAIN.GRASS;
+            if (noise < 0.6) return TERRAIN.FOREST;
+            return TERRAIN.MOUNTAIN;
+        }
+
+        // Get or create hex
+        function getHex(col, row) {
+            const key = getHexKey(col, row);
+            if (!map[key]) {
+                map[key] = {
+                    col, row,
+                    terrain: generateTerrain(col, row)
+                };
+            }
+            return map[key];
+        }
+
+        // Convert grid coordinates to pixel coordinates (flat-top)
+        function hexToPixel(col, row) {
+            const x = col * width * 0.75;
+            const y = row * height + (col % 2) * height / 2;
+            return { x, y };
+        }
+
+        // Convert pixel coordinates to grid coordinates (flat-top)
+        function pixelToHex(x, y) {
+            const q = (2/3 * x) / size;
+            const r = (-1/3 * x + Math.sqrt(3)/3 * y) / size;
+            
+            let cubeQ = q;
+            let cubeR = r;
+            let cubeS = -q - r;
+            
+            let rq = Math.round(cubeQ);
+            let rr = Math.round(cubeR);
+            let rs = Math.round(cubeS);
+            
+            const q_diff = Math.abs(rq - cubeQ);
+            const r_diff = Math.abs(rr - cubeR);
+            const s_diff = Math.abs(rs - cubeS);
+            
+            if (q_diff > r_diff && q_diff > s_diff) {
+                rq = -rr - rs;
+            } else if (r_diff > s_diff) {
+                rr = -rq - rs;
+            }
+            
+            const col = rq;
+            const row = rr + (rq - (rq & 1)) / 2;
+            
+            return { col, row };
+        }
+        
+        // Get the 6 vertices of a hex in pixel coordinates
+        function getHexVertices(centerX, centerY) {
+            const angles = [0, 60, 120, 180, 240, 300];
+            return angles.map(angle => {
+                const angleRad = (Math.PI / 180) * angle;
+                return {
+                    x: centerX + size * Math.cos(angleRad),
+                    y: centerY + size * Math.sin(angleRad)
+                };
+            });
+        }
+        
+        // Get the 6 edge midpoints of a hex
+        function getHexEdges(centerX, centerY) {
+            const angles = [30, 90, 150, 210, 270, 330];
+            return angles.map((angle, idx) => {
+                const angleRad = (Math.PI / 180) * angle;
+                return {
+                    x: centerX + size * Math.cos(angleRad),
+                    y: centerY + size * Math.sin(angleRad),
+                    side: idx
+                };
+            });
+        }
+        
+        // Distance between two points
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+        
+        // Find what the mouse is hovering over
+        function findHoveredElement(mouseX, mouseY) {
+            const worldX = mouseX - camera.x;
+            const worldY = mouseY - camera.y;
+            
+            const hexCoord = pixelToHex(worldX, worldY);
+            const hexPos = hexToPixel(hexCoord.col, hexCoord.row);
+            
+            // Check vertices first (smallest hit targets)
+            const vertices = getHexVertices(hexPos.x, hexPos.y);
+            const vertexRadius = 8 * zoom;
+            
+            for (let i = 0; i < vertices.length; i++) {
+                const v = vertices[i];
+                if (distance(worldX, worldY, v.x, v.y) < vertexRadius) {
+                    return {
+                        type: 'vertex',
+                        col: hexCoord.col,
+                        row: hexCoord.row,
+                        vertexIndex: i,
+                        x: v.x,
+                        y: v.y
+                    };
+                }
+            }
+            
+            // Check edges (medium hit targets)
+            const edges = getHexEdges(hexPos.x, hexPos.y);
+            const edgeRadius = 6 * zoom;
+            
+            for (let i = 0; i < edges.length; i++) {
+                const e = edges[i];
+                if (distance(worldX, worldY, e.x, e.y) < edgeRadius) {
+                    return {
+                        type: 'edge',
+                        col: hexCoord.col,
+                        row: hexCoord.row,
+                        edgeIndex: i,
+                        side: e.side,
+                        x: e.x,
+                        y: e.y
+                    };
+                }
+            }
+            
+            // Check if inside the hex tile
+            if (distance(worldX, worldY, hexPos.x, hexPos.y) < size) {
+                return {
+                    type: 'tile',
+                    col: hexCoord.col,
+                    row: hexCoord.row,
+                    x: hexPos.x,
+                    y: hexPos.y
+                };
+            }
+            
+            return null;
+        }
+        
+        // Handle element clicked event
+        function handleClick(element) {
+            if (!element) return;
+            
+            if (element.type === 'edge') {
+                // Get the canonical edge key (represents the edge between two hexes)
+                const neighbor = getNeighbor(element.col, element.row, element.side);
+                const edgeKey = createEdgeKey(element.col, element.row, neighbor.col, neighbor.row);
+                
+                if (currentMode === 'place') {
+                    // Place a track
+                    if (!getObject(edgeKey)) {
+                        addObject(edgeKey, {
+                            type: OBJECT_TYPES.TRACK,
+                            hex1: { col: element.col, row: element.row },
+                            hex2: { col: neighbor.col, row: neighbor.row },
+                            placedAt: Date.now()
+                        });
+                        console.log('🚂 TRACK PLACED', {
+                            edgeKey: edgeKey,
+                            hex1: `(${element.col}, ${element.row})`,
+                            hex2: `(${neighbor.col}, ${neighbor.row})`,
+                            betweenTiles: true
+                        });
+                        draw();
+                    }
+                } else if (currentMode === 'remove') {
+                    // Remove a track
+                    if (getObject(edgeKey)) {
+                        removeObject(edgeKey);
+                        console.log('🗑️ TRACK REMOVED', {
+                            edgeKey: edgeKey
+                        });
+                        draw();
+                    }
+                }
+            } else if (element.type === 'vertex') {
+                // Get the canonical vertex key (represents the point where three hexes meet)
+                const hexes = getVertexHexes(element.col, element.row, element.vertexIndex);
+                const vertexKey = createVertexKey(hexes);
+                
+                console.log('🔷 VERTEX CLICKED', {
+                    vertexKey: vertexKey,
+                    hex1: `(${hexes[0].col}, ${hexes[0].row})`,
+                    hex2: `(${hexes[1].col}, ${hexes[1].row})`,
+                    hex3: `(${hexes[2].col}, ${hexes[2].row})`,
+                    sharedBy: '3 tiles'
+                });
+            }
+        }
+
+        // Lighten a hex color
+        function lightenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.min(255, (num >> 16) + amt);
+            const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+            const B = Math.min(255, (num & 0x0000FF) + amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+        }
+
+        // Draw a flat-top hexagon
+        function drawHex(centerX, centerY, terrain, isHovered) {
+            ctx.beginPath();
+            
+            const angles = [0, 60, 120, 180, 240, 300];
+            
+            for (let i = 0; i < 6; i++) {
+                const angleRad = (Math.PI / 180) * angles[i];
+                const x = centerX + size * Math.cos(angleRad);
+                const y = centerY + size * Math.sin(angleRad);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.closePath();
+            ctx.fillStyle = isHovered ? lightenColor(terrain.color, 30) : terrain.color;
+            ctx.fill();
+            ctx.strokeStyle = isHovered ? '#ffcc00' : '#333';
+            ctx.lineWidth = isHovered ? 2 * zoom : 1 * zoom;
+            ctx.stroke();
+        }
+        
+        // Draw hover highlight for vertex
+        function drawVertexHighlight(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 6 * zoom, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 204, 0, 0.5)';
+            ctx.fill();
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2 * zoom;
+            ctx.stroke();
+        }
+        
+        // Draw hover highlight for edge
+        function drawEdgeHighlight(centerX, centerY, edgeIndex) {
+            const vertices = getHexVertices(centerX, centerY);
+            const v1 = vertices[edgeIndex];
+            const v2 = vertices[(edgeIndex + 1) % 6];
+            
+            ctx.beginPath();
+            ctx.moveTo(v1.x, v1.y);
+            ctx.lineTo(v2.x, v2.y);
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 4 * zoom;
+            ctx.stroke();
+            
+            // Draw dot at midpoint
+            const midX = (v1.x + v2.x) / 2;
+            const midY = (v1.y + v2.y) / 2;
+            ctx.beginPath();
+            ctx.arc(midX, midY, 4 * zoom, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffcc00';
+            ctx.fill();
+        }
+
+        // Draw a train track between two hexes
+        function drawTrackBetweenHexes(hex1, hex2) {
+            const pos1 = hexToPixel(hex1.col, hex1.row);
+            const pos2 = hexToPixel(hex2.col, hex2.row);
+            
+            // Calculate midpoint (where the track should be drawn)
+            const midX = (pos1.x + pos2.x) / 2 + camera.x;
+            const midY = (pos1.y + pos2.y) / 2 + camera.y;
+            
+            // Find which edge of hex1 connects to hex2
+            let edgeIndex = -1;
+            for (let i = 0; i < 6; i++) {
+                const neighbor = getNeighbor(hex1.col, hex1.row, i);
+                if (neighbor.col === hex2.col && neighbor.row === hex2.row) {
+                    edgeIndex = i;
+                    break;
+                }
+            }
+            
+            if (edgeIndex === -1) return; // Should never happen
+            
+            const screenX = pos1.x + camera.x;
+            const screenY = pos1.y + camera.y;
+            
+            const vertices = getHexVertices(screenX, screenY);
+            const v1 = vertices[edgeIndex];
+            const v2 = vertices[(edgeIndex + 1) % 6];
+            
+            // Draw railroad ties (sleepers)
+            const numTies = 5;
+            const tieWidth = size * 0.15;
+            const tieThickness = 1.5 * zoom;
+            
+            ctx.strokeStyle = '#4a3a2a';
+            ctx.lineWidth = tieThickness;
+            
+            for (let i = 0; i <= numTies; i++) {
+                const t = i / numTies;
+                const mx = v1.x + (v2.x - v1.x) * t;
+                const my = v1.y + (v2.y - v1.y) * t;
+                
+                // Perpendicular direction
+                const dx = v2.x - v1.x;
+                const dy = v2.y - v1.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const perpX = -dy / len * tieWidth;
+                const perpY = dx / len * tieWidth;
+                
+                ctx.beginPath();
+                ctx.moveTo(mx - perpX, my - perpY);
+                ctx.lineTo(mx + perpX, my + perpY);
+                ctx.stroke();
+            }
+            
+            // Draw rails
+            const railOffset = size * 0.08;
+            const railThickness = 2 * zoom;
+            
+            ctx.strokeStyle = '#708090';
+            ctx.lineWidth = railThickness;
+            
+            // Calculate perpendicular offset
+            const dx = v2.x - v1.x;
+            const dy = v2.y - v1.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const perpX = -dy / len * railOffset;
+            const perpY = dx / len * railOffset;
+            
+            // Rail 1
+            ctx.beginPath();
+            ctx.moveTo(v1.x - perpX, v1.y - perpY);
+            ctx.lineTo(v2.x - perpX, v2.y - perpY);
+            ctx.stroke();
+            
+            // Rail 2
+            ctx.beginPath();
+            ctx.moveTo(v1.x + perpX, v1.y + perpY);
+            ctx.lineTo(v2.x + perpX, v2.y + perpY);
+            ctx.stroke();
+        }
+
+        // Get visible hex range
+        function getVisibleHexRange() {
+            const margin = 3;
+            const topLeft = pixelToHex(-camera.x - width * margin, -camera.y - height * margin);
+            const bottomRight = pixelToHex(-camera.x + canvas.width + width * margin, -camera.y + canvas.height + height * margin);
+            
+            return {
+                minCol: topLeft.col - margin,
+                maxCol: bottomRight.col + margin,
+                minRow: topLeft.row - margin,
+                maxRow: bottomRight.row + margin
+            };
+        }
+
+        // Draw the map
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const range = getVisibleHexRange();
+
+            // Draw tiles
+            for (let col = range.minCol; col <= range.maxCol; col++) {
+                for (let row = range.minRow; row <= range.maxRow; row++) {
+                    const hex = getHex(col, row);
+                    const pos = hexToPixel(col, row);
+                    const screenX = pos.x + camera.x;
+                    const screenY = pos.y + camera.y;
+                    
+                    const isHovered = hoveredElement && 
+                                     hoveredElement.type === 'tile' && 
+                                     hoveredElement.col === col && 
+                                     hoveredElement.row === row;
+                    
+                    drawHex(screenX, screenY, hex.terrain, isHovered);
+                }
+            }
+            
+            // Draw all objects (tracks, etc.)
+            let trackCount = 0;
+            for (const key in objects) {
+                const obj = objects[key];
+                
+                if (obj.type === OBJECT_TYPES.TRACK) {
+                    trackCount++;
+                    
+                    // Check if either hex is in visible range
+                    const hex1 = obj.hex1;
+                    const hex2 = obj.hex2;
+                    
+                    const inRange = (hex1.col >= range.minCol && hex1.col <= range.maxCol &&
+                                    hex1.row >= range.minRow && hex1.row <= range.maxRow) ||
+                                   (hex2.col >= range.minCol && hex2.col <= range.maxCol &&
+                                    hex2.row >= range.minRow && hex2.row <= range.maxRow);
+                    
+                    if (inRange) {
+                        drawTrackBetweenHexes(hex1, hex2);
+                    }
+                }
+            }
+            
+            // Draw hover highlights on top
+            if (hoveredElement) {
+                const pos = hexToPixel(hoveredElement.col, hoveredElement.row);
+                const screenX = pos.x + camera.x;
+                const screenY = pos.y + camera.y;
+                
+                if (hoveredElement.type === 'vertex') {
+                    const vertices = getHexVertices(screenX, screenY);
+                    const v = vertices[hoveredElement.vertexIndex];
+                    drawVertexHighlight(v.x, v.y);
+                } else if (hoveredElement.type === 'edge') {
+                    drawEdgeHighlight(screenX, screenY, hoveredElement.edgeIndex);
+                }
+            }
+
+            tileCountEl.textContent = Object.keys(map).length;
+            zoomLevelEl.textContent = Math.round(zoom * 100);
+            trackCountEl.textContent = trackCount;
+        }
+
+        // Resize canvas to fill window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            draw();
+        }
+
+        // Handle zoom
+        function handleZoom(delta, mouseX, mouseY) {
+            const oldZoom = zoom;
+            
+            const zoomChange = delta > 0 ? (1 + zoomSpeed) : (1 - zoomSpeed);
+            zoom *= zoomChange;
+            zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+            
+            if (oldZoom === zoom) return;
+            
+            const worldX = mouseX - camera.x;
+            const worldY = mouseY - camera.y;
+            
+            updateSizeFromZoom();
+            
+            camera.x = mouseX - worldX * (zoom / oldZoom);
+            camera.y = mouseY - worldY * (zoom / oldZoom);
+            
+            draw();
+        }
+
+        // Mode button handlers
+        document.querySelectorAll('.mode-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.mode-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                currentMode = button.dataset.mode;
+            });
+        });
+
+        // Mouse event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMousePos = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = e.clientX - lastMousePos.x;
+                const dy = e.clientY - lastMousePos.y;
+                camera.x += dx;
+                camera.y += dy;
+                lastMousePos = { x: e.clientX, y: e.clientY };
+                draw();
+            } else {
+                const newHovered = findHoveredElement(e.clientX, e.clientY);
+                
+                if (JSON.stringify(newHovered) !== JSON.stringify(hoveredElement)) {
+                    hoveredElement = newHovered;
+                    draw();
+                }
+            }
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            if (!isDragging) {
+                const clicked = findHoveredElement(e.clientX, e.clientY);
+                handleClick(clicked);
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            if (hoveredElement) {
+                hoveredElement = null;
+                draw();
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            handleZoom(-e.deltaY, e.clientX, e.clientY);
+        }, { passive: false });
+
+        // Touch support
+        let lastTouchDistance = null;
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            
+            if (e.touches.length === 2) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+            } else {
+                isDragging = true;
+                lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            
+            if (e.touches.length === 2 && lastTouchDistance) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                
+                const delta = distance - lastTouchDistance;
+                handleZoom(delta * 2, centerX, centerY);
+                
+                lastTouchDistance = distance;
+            } else if (e.touches.length === 1 && isDragging) {
+                const dx = e.touches[0].clientX - lastMousePos.x;
+                const dy = e.touches[0].clientY - lastMousePos.y;
+                camera.x += dx;
+                camera.y += dy;
+                lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                draw();
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isDragging = false;
+            lastTouchDistance = null;
+        });
+
+        // Initialize
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+    </script>
+</body>
+</html>
