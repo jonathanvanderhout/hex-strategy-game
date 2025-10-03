@@ -140,12 +140,13 @@
         
         // Objects data structure - stores placed objects
         // Edge key format: "edge_${col1}_${row1}_${col2}_${row2}" (sorted)
-        // Vertex key format: "vertex_${col1}_${row1}_${col2}_${row2}_${col3}_${row3}" (sorted)
         const objects = {};
         
         // Camera position
         let camera = { x: 0, y: 0 };
         let isDragging = false;
+        let dragStartPos = { x: 0, y: 0 };
+        let hasDragged = false;
         let lastMousePos = { x: 0, y: 0 };
 
         // Update size based on zoom
@@ -184,22 +185,6 @@
             return { col: neighbors[side][0], row: neighbors[side][1] };
         }
 
-        // Get the three hexes that meet at a vertex
-        // Vertex numbering: 0=right, 1=top-right, 2=top-left, 3=left, 4=bottom-left, 5=bottom-right
-        function getVertexHexes(col, row, vertexIndex) {
-            const hex1 = { col, row };
-            
-            // Each vertex is shared by 3 hexes
-            // The vertex is between two edges of the current hex
-            const edge1 = vertexIndex;
-            const edge2 = (vertexIndex + 5) % 6; // Previous edge (counterclockwise)
-            
-            const hex2 = getNeighbor(col, row, edge1);
-            const hex3 = getNeighbor(col, row, edge2);
-            
-            return [hex1, hex2, hex3];
-        }
-
         // Create a canonical edge key from two hex coordinates
         function createEdgeKey(col1, row1, col2, row2) {
             // Sort to ensure consistent key regardless of order
@@ -210,27 +195,10 @@
             }
         }
 
-        // Create a canonical vertex key from three hex coordinates
-        function createVertexKey(hexes) {
-            // Sort all three hexes to ensure consistent key
-            const sorted = hexes.sort((a, b) => {
-                if (a.col !== b.col) return a.col - b.col;
-                return a.row - b.row;
-            });
-            
-            return `vertex_${sorted[0].col}_${sorted[0].row}_${sorted[1].col}_${sorted[1].row}_${sorted[2].col}_${sorted[2].row}`;
-        }
-
         // Get edge key for a hex and side
         function getEdgeKeyFromHexSide(col, row, side) {
             const neighbor = getNeighbor(col, row, side);
             return createEdgeKey(col, row, neighbor.col, neighbor.row);
-        }
-
-        // Get vertex key for a hex and vertex index
-        function getVertexKeyFromHex(col, row, vertexIndex) {
-            const hexes = getVertexHexes(col, row, vertexIndex);
-            return createVertexKey(hexes);
         }
 
         // Add an object to the map
@@ -326,24 +294,31 @@
             });
         }
         
-        // Get the 6 edge midpoints of a hex
-        function getHexEdges(centerX, centerY) {
-            const angles = [30, 90, 150, 210, 270, 330];
-            return angles.map((angle, idx) => {
-                const angleRad = (Math.PI / 180) * angle;
-                return {
-                    x: centerX + size * Math.cos(angleRad),
-                    y: centerY + size * Math.sin(angleRad),
-                    side: idx
-                };
-            });
-        }
-        
         // Distance between two points
         function distance(x1, y1, x2, y2) {
             return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
         }
-        
+
+        function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const lengthSquared = dx * dx + dy * dy;
+            
+            if (lengthSquared === 0) {
+                return distance(px, py, x1, y1);
+            }
+            
+            // Calculate projection of point onto line (clamped to segment)
+            let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+            t = Math.max(0, Math.min(1, t));
+            
+            // Find closest point on segment
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            
+            return distance(px, py, closestX, closestY);
+        }
+
         // Find what the mouse is hovering over
         function findHoveredElement(mouseX, mouseY) {
             const worldX = mouseX - camera.x;
@@ -370,21 +345,27 @@
                 }
             }
             
-            // Check edges (medium hit targets)
-            const edges = getHexEdges(hexPos.x, hexPos.y);
-            const edgeRadius = 6 * zoom;
+            // Check edges with larger hit radius for better clicking
+            const edgeRadius = 12 * zoom; // Increased from 8 to 12
             
-            for (let i = 0; i < edges.length; i++) {
-                const e = edges[i];
-                if (distance(worldX, worldY, e.x, e.y) < edgeRadius) {
+            for (let i = 0; i < 6; i++) {
+                const v1 = vertices[i];
+                const v2 = vertices[(i + 1) % 6];
+                
+                // Check distance to line segment
+                const dist = distanceToLineSegment(worldX, worldY, v1.x, v1.y, v2.x, v2.y);
+                
+                if (dist < edgeRadius) {
+                    const neighbor = getNeighbor(hexCoord.col, hexCoord.row, i);
                     return {
                         type: 'edge',
                         col: hexCoord.col,
                         row: hexCoord.row,
                         edgeIndex: i,
-                        side: e.side,
-                        x: e.x,
-                        y: e.y
+                        side: i,
+                        x: (v1.x + v2.x) / 2,
+                        y: (v1.y + v2.y) / 2,
+                        edgeKey: createEdgeKey(hexCoord.col, hexCoord.row, neighbor.col, neighbor.row)
                     };
                 }
             }
@@ -408,13 +389,13 @@
             if (!element) return;
             
             if (element.type === 'edge') {
-                // Get the canonical edge key (represents the edge between two hexes)
-                const neighbor = getNeighbor(element.col, element.row, element.side);
-                const edgeKey = createEdgeKey(element.col, element.row, neighbor.col, neighbor.row);
+                // Use the pre-calculated edge key from the hover detection
+                const edgeKey = element.edgeKey;
                 
                 if (currentMode === 'place') {
                     // Place a track
                     if (!getObject(edgeKey)) {
+                        const neighbor = getNeighbor(element.col, element.row, element.side);
                         addObject(edgeKey, {
                             type: OBJECT_TYPES.TRACK,
                             hex1: { col: element.col, row: element.row },
@@ -424,8 +405,7 @@
                         console.log('🚂 TRACK PLACED', {
                             edgeKey: edgeKey,
                             hex1: `(${element.col}, ${element.row})`,
-                            hex2: `(${neighbor.col}, ${neighbor.row})`,
-                            betweenTiles: true
+                            hex2: `(${neighbor.col}, ${neighbor.row})`
                         });
                         draw();
                     }
@@ -439,18 +419,6 @@
                         draw();
                     }
                 }
-            } else if (element.type === 'vertex') {
-                // Get the canonical vertex key (represents the point where three hexes meet)
-                const hexes = getVertexHexes(element.col, element.row, element.vertexIndex);
-                const vertexKey = createVertexKey(hexes);
-                
-                console.log('🔷 VERTEX CLICKED', {
-                    vertexKey: vertexKey,
-                    hex1: `(${hexes[0].col}, ${hexes[0].row})`,
-                    hex2: `(${hexes[1].col}, ${hexes[1].row})`,
-                    hex3: `(${hexes[2].col}, ${hexes[2].row})`,
-                    sharedBy: '3 tiles'
-                });
             }
         }
 
@@ -507,18 +475,19 @@
             const v1 = vertices[edgeIndex];
             const v2 = vertices[(edgeIndex + 1) % 6];
             
+            // Draw thick line for the edge
             ctx.beginPath();
             ctx.moveTo(v1.x, v1.y);
             ctx.lineTo(v2.x, v2.y);
             ctx.strokeStyle = '#ffcc00';
-            ctx.lineWidth = 4 * zoom;
+            ctx.lineWidth = 6 * zoom; // Match the increased hit radius
             ctx.stroke();
             
             // Draw dot at midpoint
             const midX = (v1.x + v2.x) / 2;
             const midY = (v1.y + v2.y) / 2;
             ctx.beginPath();
-            ctx.arc(midX, midY, 4 * zoom, 0, Math.PI * 2);
+            ctx.arc(midX, midY, 5 * zoom, 0, Math.PI * 2);
             ctx.fillStyle = '#ffcc00';
             ctx.fill();
         }
@@ -527,10 +496,6 @@
         function drawTrackBetweenHexes(hex1, hex2) {
             const pos1 = hexToPixel(hex1.col, hex1.row);
             const pos2 = hexToPixel(hex2.col, hex2.row);
-            
-            // Calculate midpoint (where the track should be drawn)
-            const midX = (pos1.x + pos2.x) / 2 + camera.x;
-            const midY = (pos1.y + pos2.y) / 2 + camera.y;
             
             // Find which edge of hex1 connects to hex2
             let edgeIndex = -1;
@@ -724,6 +689,8 @@
         // Mouse event handlers
         canvas.addEventListener('mousedown', (e) => {
             isDragging = true;
+            hasDragged = false;
+            dragStartPos = { x: e.clientX, y: e.clientY };
             lastMousePos = { x: e.clientX, y: e.clientY };
         });
 
@@ -731,6 +698,12 @@
             if (isDragging) {
                 const dx = e.clientX - lastMousePos.x;
                 const dy = e.clientY - lastMousePos.y;
+                
+                // Track if user has dragged more than a few pixels
+                if (Math.abs(e.clientX - dragStartPos.x) > 3 || Math.abs(e.clientY - dragStartPos.y) > 3) {
+                    hasDragged = true;
+                }
+                
                 camera.x += dx;
                 camera.y += dy;
                 lastMousePos = { x: e.clientX, y: e.clientY };
@@ -746,7 +719,8 @@
         });
         
         canvas.addEventListener('click', (e) => {
-            if (!isDragging) {
+            // Only process click if user didn't drag
+            if (!hasDragged) {
                 const clicked = findHoveredElement(e.clientX, e.clientY);
                 handleClick(clicked);
             }
@@ -781,6 +755,8 @@
                 lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
             } else {
                 isDragging = true;
+                hasDragged = false;
+                dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                 lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
             }
         });
@@ -803,6 +779,13 @@
             } else if (e.touches.length === 1 && isDragging) {
                 const dx = e.touches[0].clientX - lastMousePos.x;
                 const dy = e.touches[0].clientY - lastMousePos.y;
+                
+                // Track if user has dragged
+                if (Math.abs(e.touches[0].clientX - dragStartPos.x) > 3 || 
+                    Math.abs(e.touches[0].clientY - dragStartPos.y) > 3) {
+                    hasDragged = true;
+                }
+                
                 camera.x += dx;
                 camera.y += dy;
                 lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -812,6 +795,14 @@
 
         canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
+            
+            // Handle tap (touch without drag)
+            if (!hasDragged && e.changedTouches.length > 0) {
+                const touch = e.changedTouches[0];
+                const clicked = findHoveredElement(touch.clientX, touch.clientY);
+                handleClick(clicked);
+            }
+            
             isDragging = false;
             lastTouchDistance = null;
         });
