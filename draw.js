@@ -8,6 +8,7 @@
  *   canvas,
  *   map,
  *   objects,
+ *   trains,
  *   camera,
  *   hoveredElement,
  *   size,
@@ -16,7 +17,8 @@
  *   OBJECT_TYPES,
  *   tileCountEl,
  *   zoomLevelEl,
- *   trackCountEl
+ *   trackCountEl,
+ *   trainCountEl
  * });
  */
 
@@ -259,6 +261,65 @@ function drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom) {
   ctx.stroke();
 }
 
+// Draw a train on a track
+// Draw a train on a track
+function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
+  const pos1 = hexToPixel(hex1.col, hex1.row, size);
+  
+  // Find which edge of hex1 connects to hex2
+  let edgeIndex = -1;
+  for (let i = 0; i < 6; i++) {
+    const neighbor = getNeighbor(hex1.col, hex1.row, i);
+    if (neighbor.col === hex2.col && neighbor.row === hex2.row) {
+      edgeIndex = i;
+      break;
+    }
+  }
+
+  if (edgeIndex === -1) return;
+
+  const screenX = pos1.x + camera.x;
+  const screenY = pos1.y + camera.y;
+  const vertices = getHexVertices(screenX, screenY, size);
+  const v1 = vertices[edgeIndex];
+  const v2 = vertices[(edgeIndex + 1) % 6];
+
+  // Calculate train position
+  const trainX = v1.x + (v2.x - v1.x) * progress;
+  const trainY = v1.y + (v2.y - v1.y) * progress;
+
+  // Calculate rotation angle based on track direction
+  const dx = v2.x - v1.x;
+  const dy = v2.y - v1.y;
+  const angle = Math.atan2(dy, dx);
+
+  // Train dimensions
+  const trainLength = size * 0.3 * zoom;
+  const trainWidth = size * 0.15 * zoom;
+
+  ctx.save();
+  ctx.translate(trainX, trainY);
+  ctx.rotate(angle);
+
+  // Draw train body (rectangle)
+  ctx.fillStyle = "#c41e3a";
+  ctx.fillRect(-trainLength / 2, -trainWidth / 2, trainLength, trainWidth);
+  ctx.strokeStyle = "#8b0000";
+  ctx.lineWidth = 1.5 * zoom;
+  ctx.strokeRect(-trainLength / 2, -trainWidth / 2, trainLength, trainWidth);
+
+  // Draw train windows (two small rectangles)
+  ctx.fillStyle = "#ffeb3b";
+  const windowWidth = trainLength * 0.25;
+  const windowHeight = trainWidth * 0.5;
+  const windowSpacing = trainLength * 0.15;
+  
+  ctx.fillRect(-windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
+  ctx.fillRect(windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
+
+  ctx.restore();
+}
+
 // Get visible hex range
 function getVisibleHexRange(canvas, camera, size) {
   const width = size * 2;
@@ -291,6 +352,7 @@ function getVisibleHexRange(canvas, camera, size) {
  * @param {HTMLCanvasElement} params.canvas - Canvas element
  * @param {Object} params.map - Map data structure (hex tiles)
  * @param {Object} params.objects - Objects data structure (tracks, etc.)
+ * @param {Array} params.trains - Trains array
  * @param {Object} params.camera - Camera position {x, y}
  * @param {Object|null} params.hoveredElement - Currently hovered element
  * @param {number} params.size - Current hex size (affected by zoom)
@@ -300,12 +362,14 @@ function getVisibleHexRange(canvas, camera, size) {
  * @param {HTMLElement} params.tileCountEl - Element to display tile count
  * @param {HTMLElement} params.zoomLevelEl - Element to display zoom level
  * @param {HTMLElement} params.trackCountEl - Element to display track count
+ * @param {HTMLElement} params.trainCountEl - Element to display train count
  */
 export function draw(ctx, params) {
   const {
     canvas,
     map,
     objects,
+    trains,
     camera,
     hoveredElement,
     size,
@@ -315,6 +379,7 @@ export function draw(ctx, params) {
     tileCountEl,
     zoomLevelEl,
     trackCountEl,
+    trainCountEl,
   } = params;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -381,6 +446,29 @@ export function draw(ctx, params) {
     }
   }
 
+  // Draw trains
+  if (trains) {
+    trains.forEach(train => {
+      // Check if train is in visible range
+      const hex1 = train.hex1;
+      const hex2 = train.hex2;
+
+      const inRange =
+        (hex1.col >= range.minCol &&
+          hex1.col <= range.maxCol &&
+          hex1.row >= range.minRow &&
+          hex1.row <= range.maxRow) ||
+        (hex2.col >= range.minCol &&
+          hex2.col <= range.maxCol &&
+          hex2.row >= range.minRow &&
+          hex2.row <= range.maxRow);
+
+      if (inRange) {
+        drawTrain(ctx, train.hex1, train.hex2, train.progress, camera, size, zoom);
+      }
+    });
+  }
+
   // Draw hover highlights on top
   if (hoveredElement) {
     const pos = hexToPixel(hoveredElement.col, hoveredElement.row, size);
@@ -407,4 +495,7 @@ export function draw(ctx, params) {
   tileCountEl.textContent = Object.keys(map).length;
   zoomLevelEl.textContent = Math.round(zoom * 100);
   trackCountEl.textContent = trackCount;
+  if (trainCountEl && trains) {
+    trainCountEl.textContent = trains.length;
+  }
 }
