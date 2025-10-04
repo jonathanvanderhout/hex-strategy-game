@@ -120,7 +120,6 @@
 
     <script type="module">
       import { draw } from "./draw.js";
-      // import { initialSetup } from "./initialSetup.js";
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -166,6 +165,9 @@
       const trains = [];
       let nextTrainId = 1;
 
+      // Track network graph - maps vertex keys to connected edges
+      const trackGraph = {};
+
       // Camera position
       let camera = { x: 0, y: 0 };
       let isDragging = false;
@@ -182,7 +184,6 @@
 
       // Get the neighbor hex for a given side
       function getNeighbor(col, row, side) {
-        // console.log({ col, row, side });
         const isEven = col % 2 === 0;
         const neighbors = isEven
           ? [
@@ -201,7 +202,6 @@
               [col, row - 1],
               [col + 1, row],
             ];
-        // console.log({ col: neighbors[side][0], row: neighbors[side][1] });
         return { col: neighbors[side][0], row: neighbors[side][1] };
       }
 
@@ -239,6 +239,134 @@
         return `edge_${first[0]}_${first[1]}_${second[0]}_${second[1]}`;
       }
 
+      // Create a vertex key from hex coordinates and vertex index
+      function createVertexKey(col, row, vertexIndex) {
+        // Get the actual world position of the vertex to create a canonical key
+        // Since multiple hexes share vertices, we need to identify the same vertex consistently
+        const pos = hexToPixel(col, row);
+        const angles = [0, 60, 120, 180, 240, 300];
+        const angleRad = (Math.PI / 180) * angles[vertexIndex];
+        const x = Math.round((pos.x + size * Math.cos(angleRad)) * 100) / 100;
+        const y = Math.round((pos.y + size * Math.sin(angleRad)) * 100) / 100;
+        return `vertex_${x}_${y}`;
+      }
+
+      // Get the two vertices for an edge
+      function getEdgeVertices(col, row, side) {
+        const vertex1Index = side;
+        const vertex2Index = (side + 1) % 6;
+        return [
+          createVertexKey(col, row, vertex1Index),
+          createVertexKey(col, row, vertex2Index)
+        ];
+      }
+
+      // Build track network graph
+      function rebuildTrackGraph() {
+        // Clear existing graph
+        for (let key in trackGraph) {
+          delete trackGraph[key];
+        }
+
+        // Build graph from all track objects
+        for (let edgeKey in objects) {
+          const obj = objects[edgeKey];
+          if (obj.type === OBJECT_TYPES.TRACK) {
+            // Find which side this edge is on hex1
+            let side = -1;
+            for (let i = 0; i < 6; i++) {
+              const neighbor = getNeighbor(obj.hex1.col, obj.hex1.row, i);
+              if (neighbor.col === obj.hex2.col && neighbor.row === obj.hex2.row) {
+                side = i;
+                break;
+              }
+            }
+
+            if (side !== -1) {
+              const [vertex1Key, vertex2Key] = getEdgeVertices(obj.hex1.col, obj.hex1.row, side);
+              
+              // Add this edge to both vertices' connection lists
+              if (!trackGraph[vertex1Key]) trackGraph[vertex1Key] = [];
+              if (!trackGraph[vertex2Key]) trackGraph[vertex2Key] = [];
+              
+              trackGraph[vertex1Key].push(edgeKey);
+              trackGraph[vertex2Key].push(edgeKey);
+            }
+          }
+        }
+      }
+
+      // Get connected tracks at a vertex, excluding the current track
+      function getConnectedTracks(currentEdgeKey, vertexKey) {
+        if (!trackGraph[vertexKey]) return [];
+        return trackGraph[vertexKey].filter(key => key !== currentEdgeKey);
+      }
+
+      // Find which vertex the train is at based on its progress
+      function getTrainVertex(train) {
+        // Find which side this edge is on hex1
+        let side = -1;
+        for (let i = 0; i < 6; i++) {
+          const neighbor = getNeighbor(train.hex1.col, train.hex1.row, i);
+          if (neighbor.col === train.hex2.col && neighbor.row === train.hex2.row) {
+            side = i;
+            break;
+          }
+        }
+
+        if (side === -1) return null;
+
+        const [vertex1Key, vertex2Key] = getEdgeVertices(train.hex1.col, train.hex1.row, side);
+        
+        // If progress is 0, train is at vertex1; if 1, train is at vertex2
+        return train.progress <= 0 ? vertex1Key : vertex2Key;
+      }
+
+      // Transition train to a new track segment
+      function transitionTrainToNewTrack(train, newEdgeKey) {
+        const newTrack = objects[newEdgeKey];
+        if (!newTrack) return false;
+
+        // Get current vertex the train is at
+        const currentVertex = getTrainVertex(train);
+        if (!currentVertex) return false;
+
+        // Find which side of newTrack's hex1 this edge is on
+        let newSide = -1;
+        for (let i = 0; i < 6; i++) {
+          const neighbor = getNeighbor(newTrack.hex1.col, newTrack.hex1.row, i);
+          if (neighbor.col === newTrack.hex2.col && neighbor.row === newTrack.hex2.row) {
+            newSide = i;
+            break;
+          }
+        }
+
+        if (newSide === -1) return false;
+
+        const [newVertex1, newVertex2] = getEdgeVertices(newTrack.hex1.col, newTrack.hex1.row, newSide);
+
+        // Determine which end of the new track to start from
+        if (currentVertex === newVertex1) {
+          // Start from vertex1 (progress 0) and go toward vertex2
+          train.hex1 = newTrack.hex1;
+          train.hex2 = newTrack.hex2;
+          train.edgeKey = newEdgeKey;
+          train.progress = 0;
+          train.direction = 1;
+        } else if (currentVertex === newVertex2) {
+          // Start from vertex2 (progress 1) and go toward vertex1
+          train.hex1 = newTrack.hex1;
+          train.hex2 = newTrack.hex2;
+          train.edgeKey = newEdgeKey;
+          train.progress = 1;
+          train.direction = -1;
+        } else {
+          return false;
+        }
+
+        return true;
+      }
+
       // Simple noise-like function for terrain generation
       function pseudoNoise(col, row) {
         let x = col * 0.1;
@@ -274,7 +402,6 @@
       function hexToPixel(col, row) {
         const x = col * width * 0.75;
         const y = row * height + ((Math.abs(col) % 2) * height) / 2;
-
         return { x, y };
       }
 
@@ -525,13 +652,15 @@
                 hex1: `(${element.col}, ${element.row})`,
                 hex2: `(${neighbor.col}, ${neighbor.row})`,
               });
-              draw(ctx, getDrawParams());
+              rebuildTrackGraph();
+              //draw(ctx, getDrawParams());
             }
           } else if (currentMode === "remove") {
             if (objects[edgeKey]) {
               delete objects[edgeKey];
               console.log("🗑️ TRACK REMOVED", { edgeKey });
-              draw(ctx, getDrawParams());
+              rebuildTrackGraph();
+              //draw(ctx, getDrawParams());
             }
           } else if (currentMode === "train") {
             if (objects[edgeKey]) {
@@ -547,7 +676,7 @@
                 hex2: { col: neighbor.col, row: neighbor.row },
                 progress: 0.5,
                 direction: 1,
-                speed: 0.006,
+                speed: 0.020,
               });
               console.log("🚆 TRAIN PLACED", {
                 id: nextTrainId - 1,
@@ -555,7 +684,7 @@
                 hex1: `(${element.col}, ${element.row})`,
                 hex2: `(${neighbor.col}, ${neighbor.row})`,
               });
-              draw(ctx, getDrawParams());
+              //draw(ctx, getDrawParams());
             }
           }
         }
@@ -563,18 +692,43 @@
 
       // Animate trains
       function animateTrains() {
-        trains.forEach((train) => {
+        trains.forEach(train => {
           train.progress += train.speed * train.direction;
-
-          if (train.progress >= 1) {
-            train.progress = 1;
-            train.direction = -1;
-          } else if (train.progress <= 0) {
-            train.progress = 0;
-            train.direction = 1;
+          
+          // Check if train reached the end of the track
+          if (train.progress >= 1 || train.progress <= 0) {
+            // Clamp progress
+            train.progress = train.progress >= 1 ? 1 : 0;
+            
+            // Get current vertex
+            const currentVertex = getTrainVertex(train);
+            
+            if (currentVertex) {
+              // Get connected tracks at this vertex
+              const connectedTracks = getConnectedTracks(train.edgeKey, currentVertex);
+              
+              if (connectedTracks.length > 0) {
+                // Random walk: pick a random connected track
+                const nextTrackKey = connectedTracks[Math.floor(Math.random() * connectedTracks.length)];
+                
+                // Transition to the new track
+                const transitioned = transitionTrainToNewTrack(train, nextTrackKey);
+                
+                if (!transitioned) {
+                  // If transition failed, just reverse direction
+                  train.direction *= -1;
+                }
+              } else {
+                // Dead end - reverse direction
+                train.direction *= -1;
+              }
+            } else {
+              // Fallback: reverse direction
+              train.direction *= -1;
+            }
           }
         });
-
+        
         draw(ctx, getDrawParams());
         requestAnimationFrame(animateTrains);
       }
@@ -584,7 +738,7 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         initializeVisibleMap();
-        draw(ctx, getDrawParams());
+        //draw(ctx, getDrawParams());
       }
 
       // Handle zoom
@@ -606,7 +760,7 @@
         camera.y = mouseY - worldY * (zoom / oldZoom);
 
         initializeVisibleMap();
-        draw(ctx, getDrawParams());
+        //draw(ctx, getDrawParams());
       }
 
       // Mode button handlers
@@ -644,13 +798,13 @@
           camera.y += dy;
           lastMousePos = { x: e.clientX, y: e.clientY };
           initializeVisibleMap();
-          draw(ctx, getDrawParams());
+          //draw(ctx, getDrawParams());
         } else {
           const newHovered = findHoveredElement(e.clientX, e.clientY);
 
           if (JSON.stringify(newHovered) !== JSON.stringify(hoveredElement)) {
             hoveredElement = newHovered;
-            draw(ctx, getDrawParams());
+            //draw(ctx, getDrawParams());
           }
         }
       });
@@ -670,7 +824,7 @@
         isDragging = false;
         if (hoveredElement) {
           hoveredElement = null;
-          draw(ctx, getDrawParams());
+          //draw(ctx, getDrawParams());
         }
       });
 
@@ -695,8 +849,7 @@
           lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
         } else {
           isDragging = true;
-          hasDragged = false;
-          dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          hasDragged = false;dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
       });
@@ -731,7 +884,7 @@
           camera.y += dy;
           lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           initializeVisibleMap();
-          draw(ctx, getDrawParams());
+          //draw(ctx, getDrawParams());
         }
       });
 
@@ -749,8 +902,6 @@
       });
 
       // Initialize
-      // initialSetup(map, objects, TERRAIN, OBJECT_TYPES);
-
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       animateTrains();
