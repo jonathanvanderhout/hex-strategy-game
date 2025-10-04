@@ -181,7 +181,7 @@
 
       // Get the neighbor hex for a given side (flat-top orientation)
 function getNeighbor(col, row, side) {
-        console.log({ col, row, side });
+        // console.log({ col, row, side });
 
         const isEven = col % 2 === 0;
 
@@ -204,12 +204,12 @@ function getNeighbor(col, row, side) {
               [col +1 , row],     
             ];
 
-        console.log({
-          neighbor: JSON.stringify({
-            col: neighbors[side][0],
-            row: neighbors[side][1],
-          }),
-        });
+        // console.log({
+        //   neighbor: JSON.stringify({
+        //     col: neighbors[side][0],
+        //     row: neighbors[side][1],
+        //   }),
+        // });
 
         return { col: neighbors[side][0], row: neighbors[side][1] };
       }
