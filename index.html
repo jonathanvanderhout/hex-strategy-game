@@ -267,7 +267,8 @@
       // Convert grid coordinates to pixel coordinates
       function hexToPixel(col, row) {
         const x = col * width * 0.75;
-        const y = row * height + ((col % 2) * height) / 2;
+        const y = row * height + ((Math.abs(col) % 2) * height) / 2;
+
         return { x, y };
       }
 
@@ -294,8 +295,8 @@
           rr = -rq - rs;
         }
 
-        const col = rq;
-        const row = rr + (rq - (rq & 1)) / 2;
+      const col = rq;
+      const row = rr + Math.floor(rq / 2);
 
         return { col, row };
       }

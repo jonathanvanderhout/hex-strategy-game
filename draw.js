@@ -1,9 +1,9 @@
 /**
  * Drawing module for hexagon terrain map
- * 
+ *
  * Usage:
  * import { draw } from './draw.js';
- * 
+ *
  * draw(ctx, {
  *   canvas,
  *   map,
@@ -27,9 +27,7 @@ function lightenColor(color, percent) {
   const R = Math.min(255, (num >> 16) + amt);
   const G = Math.min(255, ((num >> 8) & 0x00ff) + amt);
   const B = Math.min(255, (num & 0x0000ff) + amt);
-  return (
-    "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1)
-  );
+  return "#" + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
 }
 
 // Convert grid coordinates to pixel coordinates (flat-top)
@@ -37,7 +35,7 @@ function hexToPixel(col, row, size) {
   const width = size * 2;
   const height = Math.sqrt(3) * size;
   const x = col * width * 0.75;
-  const y = row * height + ((col % 2) * height) / 2;
+  const y = row * height + ((Math.abs(col) % 2) * height) / 2;
   return { x, y };
 }
 
@@ -65,7 +63,7 @@ function pixelToHex(x, y, size) {
   }
 
   const col = rq;
-  const row = rr + (rq - (rq & 1)) / 2;
+  const row = rr + Math.floor(rq / 2);
 
   return { col, row };
 }
@@ -108,7 +106,17 @@ function getNeighbor(col, row, side) {
 }
 
 // Draw a flat-top hexagon
-function drawHex(ctx, centerX, centerY, terrain, isHovered, col, row, size, zoom) {
+function drawHex(
+  ctx,
+  centerX,
+  centerY,
+  terrain,
+  isHovered,
+  col,
+  row,
+  size,
+  zoom
+) {
   ctx.beginPath();
 
   const angles = [0, 60, 120, 180, 240, 300];
@@ -126,9 +134,7 @@ function drawHex(ctx, centerX, centerY, terrain, isHovered, col, row, size, zoom
   }
 
   ctx.closePath();
-  ctx.fillStyle = isHovered
-    ? lightenColor(terrain.color, 30)
-    : terrain.color;
+  ctx.fillStyle = isHovered ? lightenColor(terrain.color, 30) : terrain.color;
   ctx.fill();
   ctx.strokeStyle = isHovered ? "#ffcc00" : "#333";
   ctx.lineWidth = isHovered ? 2 * zoom : 1 * zoom;
@@ -258,7 +264,7 @@ function getVisibleHexRange(canvas, camera, size) {
   const width = size * 2;
   const height = Math.sqrt(3) * size;
   const margin = 3;
-  
+
   const topLeft = pixelToHex(
     -camera.x - width * margin,
     -camera.y - height * margin,
@@ -308,7 +314,7 @@ export function draw(ctx, params) {
     OBJECT_TYPES,
     tileCountEl,
     zoomLevelEl,
-    trackCountEl
+    trackCountEl,
   } = params;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -320,7 +326,7 @@ export function draw(ctx, params) {
     for (let row = range.minRow; row <= range.maxRow; row++) {
       const hexKey = `${col},${row}`;
       const hex = map[hexKey];
-      
+
       if (!hex) continue;
 
       const pos = hexToPixel(col, row, size);
@@ -333,7 +339,17 @@ export function draw(ctx, params) {
         hoveredElement.col === col &&
         hoveredElement.row === row;
 
-      drawHex(ctx, screenX, screenY, hex.terrain, isHovered, col, row, size, zoom);
+      drawHex(
+        ctx,
+        screenX,
+        screenY,
+        hex.terrain,
+        isHovered,
+        col,
+        row,
+        size,
+        zoom
+      );
     }
   }
 
@@ -376,7 +392,14 @@ export function draw(ctx, params) {
       const v = vertices[hoveredElement.vertexIndex];
       drawVertexHighlight(ctx, v.x, v.y, zoom);
     } else if (hoveredElement.type === "edge") {
-      drawEdgeHighlight(ctx, screenX, screenY, hoveredElement.edgeIndex, size, zoom);
+      drawEdgeHighlight(
+        ctx,
+        screenX,
+        screenY,
+        hoveredElement.edgeIndex,
+        size,
+        zoom
+      );
     }
   }
 
