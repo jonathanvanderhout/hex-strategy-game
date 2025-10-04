@@ -120,6 +120,12 @@
 
     <script type="module">
       import { draw } from "./draw.js";
+      import {
+        hexToPixel,
+        pixelToHex,
+        getHexVertices,
+        getNeighbor,
+      } from "./hexUtils.js";
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -183,27 +189,27 @@
       }
 
       // Get the neighbor hex for a given side
-      function getNeighbor(col, row, side) {
-        const isEven = col % 2 === 0;
-        const neighbors = isEven
-          ? [
-              [col + 1, row],
-              [col, row + 1],
-              [col - 1, row],
-              [col - 1, row - 1],
-              [col, row - 1],
-              [col + 1, row - 1],
-            ]
-          : [
-              [col + 1, row + 1],
-              [col, row + 1],
-              [col - 1, row + 1],
-              [col - 1, row],
-              [col, row - 1],
-              [col + 1, row],
-            ];
-        return { col: neighbors[side][0], row: neighbors[side][1] };
-      }
+      // function getNeighbor(col, row, side) {
+      //   const isEven = col % 2 === 0;
+      //   const neighbors = isEven
+      //     ? [
+      //         [col + 1, row],
+      //         [col, row + 1],
+      //         [col - 1, row],
+      //         [col - 1, row - 1],
+      //         [col, row - 1],
+      //         [col + 1, row - 1],
+      //       ]
+      //     : [
+      //         [col + 1, row + 1],
+      //         [col, row + 1],
+      //         [col - 1, row + 1],
+      //         [col - 1, row],
+      //         [col, row - 1],
+      //         [col + 1, row],
+      //       ];
+      //   return { col: neighbors[side][0], row: neighbors[side][1] };
+      // }
 
       // Get all neighbors for debugging
       function getAllNeighbors(col, row) {
@@ -241,13 +247,19 @@
 
       // Create a vertex key from hex coordinates and vertex index
       function createVertexKey(col, row, vertexIndex) {
-        // Get the actual world position of the vertex to create a canonical key
-        // Since multiple hexes share vertices, we need to identify the same vertex consistently
-        const pos = hexToPixel(col, row);
+        // Use baseSize instead of size to make vertex keys zoom-independent
+        const pos = hexToPixel(col, row, size);
         const angles = [0, 60, 120, 180, 240, 300];
         const angleRad = (Math.PI / 180) * angles[vertexIndex];
-        const x = Math.round((pos.x + size * Math.cos(angleRad)) * 100) / 100;
-        const y = Math.round((pos.y + size * Math.sin(angleRad)) * 100) / 100;
+        // Use baseSize here instead of size - this makes the key independent of zoom
+        const x =
+          Math.round(
+            ((pos.x / size) * baseSize + baseSize * Math.cos(angleRad)) * 100
+          ) / 100;
+        const y =
+          Math.round(
+            ((pos.y / size) * baseSize + baseSize * Math.sin(angleRad)) * 100
+          ) / 100;
         return `vertex_${x}_${y}`;
       }
 
@@ -257,7 +269,7 @@
         const vertex2Index = (side + 1) % 6;
         return [
           createVertexKey(col, row, vertex1Index),
-          createVertexKey(col, row, vertex2Index)
+          createVertexKey(col, row, vertex2Index),
         ];
       }
 
@@ -276,19 +288,26 @@
             let side = -1;
             for (let i = 0; i < 6; i++) {
               const neighbor = getNeighbor(obj.hex1.col, obj.hex1.row, i);
-              if (neighbor.col === obj.hex2.col && neighbor.row === obj.hex2.row) {
+              if (
+                neighbor.col === obj.hex2.col &&
+                neighbor.row === obj.hex2.row
+              ) {
                 side = i;
                 break;
               }
             }
 
             if (side !== -1) {
-              const [vertex1Key, vertex2Key] = getEdgeVertices(obj.hex1.col, obj.hex1.row, side);
-              
+              const [vertex1Key, vertex2Key] = getEdgeVertices(
+                obj.hex1.col,
+                obj.hex1.row,
+                side
+              );
+
               // Add this edge to both vertices' connection lists
               if (!trackGraph[vertex1Key]) trackGraph[vertex1Key] = [];
               if (!trackGraph[vertex2Key]) trackGraph[vertex2Key] = [];
-              
+
               trackGraph[vertex1Key].push(edgeKey);
               trackGraph[vertex2Key].push(edgeKey);
             }
@@ -299,7 +318,7 @@
       // Get connected tracks at a vertex, excluding the current track
       function getConnectedTracks(currentEdgeKey, vertexKey) {
         if (!trackGraph[vertexKey]) return [];
-        return trackGraph[vertexKey].filter(key => key !== currentEdgeKey);
+        return trackGraph[vertexKey].filter((key) => key !== currentEdgeKey);
       }
 
       // Find which vertex the train is at based on its progress
@@ -308,7 +327,10 @@
         let side = -1;
         for (let i = 0; i < 6; i++) {
           const neighbor = getNeighbor(train.hex1.col, train.hex1.row, i);
-          if (neighbor.col === train.hex2.col && neighbor.row === train.hex2.row) {
+          if (
+            neighbor.col === train.hex2.col &&
+            neighbor.row === train.hex2.row
+          ) {
             side = i;
             break;
           }
@@ -316,8 +338,12 @@
 
         if (side === -1) return null;
 
-        const [vertex1Key, vertex2Key] = getEdgeVertices(train.hex1.col, train.hex1.row, side);
-        
+        const [vertex1Key, vertex2Key] = getEdgeVertices(
+          train.hex1.col,
+          train.hex1.row,
+          side
+        );
+
         // If progress is 0, train is at vertex1; if 1, train is at vertex2
         return train.progress <= 0 ? vertex1Key : vertex2Key;
       }
@@ -335,7 +361,10 @@
         let newSide = -1;
         for (let i = 0; i < 6; i++) {
           const neighbor = getNeighbor(newTrack.hex1.col, newTrack.hex1.row, i);
-          if (neighbor.col === newTrack.hex2.col && neighbor.row === newTrack.hex2.row) {
+          if (
+            neighbor.col === newTrack.hex2.col &&
+            neighbor.row === newTrack.hex2.row
+          ) {
             newSide = i;
             break;
           }
@@ -343,7 +372,11 @@
 
         if (newSide === -1) return false;
 
-        const [newVertex1, newVertex2] = getEdgeVertices(newTrack.hex1.col, newTrack.hex1.row, newSide);
+        const [newVertex1, newVertex2] = getEdgeVertices(
+          newTrack.hex1.col,
+          newTrack.hex1.row,
+          newSide
+        );
 
         // Determine which end of the new track to start from
         if (currentVertex === newVertex1) {
@@ -399,52 +432,52 @@
       }
 
       // Convert grid coordinates to pixel coordinates
-      function hexToPixel(col, row) {
-        const x = col * width * 0.75;
-        const y = row * height + ((Math.abs(col) % 2) * height) / 2;
-        return { x, y };
-      }
+      // function hexToPixel(col, row) {
+      //   const x = col * width * 0.75;
+      //   const y = row * height + ((Math.abs(col) % 2) * height) / 2;
+      //   return { x, y };
+      // }
 
       // Convert pixel coordinates to grid coordinates
-      function pixelToHex(x, y) {
-        const q = ((2 / 3) * x) / size;
-        const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
+      // function pixelToHex(x, y) {
+      //   const q = ((2 / 3) * x) / size;
+      //   const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
 
-        let cubeQ = q;
-        let cubeR = r;
-        let cubeS = -q - r;
+      //   let cubeQ = q;
+      //   let cubeR = r;
+      //   let cubeS = -q - r;
 
-        let rq = Math.round(cubeQ);
-        let rr = Math.round(cubeR);
-        let rs = Math.round(cubeS);
+      //   let rq = Math.round(cubeQ);
+      //   let rr = Math.round(cubeR);
+      //   let rs = Math.round(cubeS);
 
-        const q_diff = Math.abs(rq - cubeQ);
-        const r_diff = Math.abs(rr - cubeR);
-        const s_diff = Math.abs(rs - cubeS);
+      //   const q_diff = Math.abs(rq - cubeQ);
+      //   const r_diff = Math.abs(rr - cubeR);
+      //   const s_diff = Math.abs(rs - cubeS);
 
-        if (q_diff > r_diff && q_diff > s_diff) {
-          rq = -rr - rs;
-        } else if (r_diff > s_diff) {
-          rr = -rq - rs;
-        }
+      //   if (q_diff > r_diff && q_diff > s_diff) {
+      //     rq = -rr - rs;
+      //   } else if (r_diff > s_diff) {
+      //     rr = -rq - rs;
+      //   }
 
-        const col = rq;
-        const row = rr + Math.floor(rq / 2);
+      //   const col = rq;
+      //   const row = rr + Math.floor(rq / 2);
 
-        return { col, row };
-      }
+      //   return { col, row };
+      // }
 
       // Get the 6 vertices of a hex in pixel coordinates
-      function getHexVertices(centerX, centerY) {
-        const angles = [0, 60, 120, 180, 240, 300];
-        return angles.map((angle) => {
-          const angleRad = (Math.PI / 180) * angle;
-          return {
-            x: centerX + size * Math.cos(angleRad),
-            y: centerY + size * Math.sin(angleRad),
-          };
-        });
-      }
+      // function getHexVertices(centerX, centerY) {
+      //   const angles = [0, 60, 120, 180, 240, 300];
+      //   return angles.map((angle) => {
+      //     const angleRad = (Math.PI / 180) * angle;
+      //     return {
+      //       x: centerX + size * Math.cos(angleRad),
+      //       y: centerY + size * Math.sin(angleRad),
+      //     };
+      //   });
+      // }
 
       // Distance between two points
       function distance(x1, y1, x2, y2) {
@@ -475,10 +508,10 @@
         const worldX = mouseX - camera.x;
         const worldY = mouseY - camera.y;
 
-        const hexCoord = pixelToHex(worldX, worldY);
-        const hexPos = hexToPixel(hexCoord.col, hexCoord.row);
+        const hexCoord = pixelToHex(worldX, worldY, size);
+        const hexPos = hexToPixel(hexCoord.col, hexCoord.row, size);
 
-        const vertices = getHexVertices(hexPos.x, hexPos.y);
+        const vertices = getHexVertices(hexPos.x, hexPos.y, size);
         const vertexRadius = 8 * zoom;
 
         for (let i = 0; i < vertices.length; i++) {
@@ -549,11 +582,13 @@
         const margin = 3;
         const topLeft = pixelToHex(
           -camera.x - width * margin,
-          -camera.y - height * margin
+          -camera.y - height * margin,
+          size
         );
         const bottomRight = pixelToHex(
           -camera.x + canvas.width + width * margin,
-          -camera.y + canvas.height + height * margin
+          -camera.y + canvas.height + height * margin,
+          size
         );
 
         return {
@@ -676,7 +711,7 @@
                 hex2: { col: neighbor.col, row: neighbor.row },
                 progress: 0.5,
                 direction: 1,
-                speed: 0.020,
+                speed: 0.02,
               });
               console.log("🚆 TRAIN PLACED", {
                 id: nextTrainId - 1,
@@ -692,28 +727,37 @@
 
       // Animate trains
       function animateTrains() {
-        trains.forEach(train => {
+        trains.forEach((train) => {
           train.progress += train.speed * train.direction;
-          
+
           // Check if train reached the end of the track
           if (train.progress >= 1 || train.progress <= 0) {
             // Clamp progress
             train.progress = train.progress >= 1 ? 1 : 0;
-            
+
             // Get current vertex
             const currentVertex = getTrainVertex(train);
-            
+
             if (currentVertex) {
               // Get connected tracks at this vertex
-              const connectedTracks = getConnectedTracks(train.edgeKey, currentVertex);
-              
+              const connectedTracks = getConnectedTracks(
+                train.edgeKey,
+                currentVertex
+              );
+
               if (connectedTracks.length > 0) {
                 // Random walk: pick a random connected track
-                const nextTrackKey = connectedTracks[Math.floor(Math.random() * connectedTracks.length)];
-                
+                const nextTrackKey =
+                  connectedTracks[
+                    Math.floor(Math.random() * connectedTracks.length)
+                  ];
+
                 // Transition to the new track
-                const transitioned = transitionTrainToNewTrack(train, nextTrackKey);
-                
+                const transitioned = transitionTrainToNewTrack(
+                  train,
+                  nextTrackKey
+                );
+
                 if (!transitioned) {
                   // If transition failed, just reverse direction
                   train.direction *= -1;
@@ -728,7 +772,7 @@
             }
           }
         });
-        
+
         draw(ctx, getDrawParams());
         requestAnimationFrame(animateTrains);
       }
@@ -849,7 +893,8 @@
           lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
         } else {
           isDragging = true;
-          hasDragged = false;dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          hasDragged = false;
+          dragStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
       });
