@@ -118,6 +118,7 @@
 
     <script type="module">
       import { draw } from "./draw.js";
+      import { initialSetup } from "./initialSetup.js";
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -175,6 +176,7 @@
 
       // Get the neighbor hex for a given side
       function getNeighbor(col, row, side) {
+        console.log({ col, row, side });
         const isEven = col % 2 === 0;
         const neighbors = isEven
           ? [
@@ -193,6 +195,7 @@
               [col, row - 1],
               [col + 1, row],
             ];
+        console.log({ col: neighbors[side][0], row: neighbors[side][1] });
         return { col: neighbors[side][0], row: neighbors[side][1] };
       }
 
@@ -695,6 +698,8 @@
       });
 
       // Initialize
+      initialSetup(map, objects, TERRAIN, OBJECT_TYPES);
+
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
     </script>
