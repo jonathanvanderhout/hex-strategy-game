@@ -120,6 +120,7 @@
 
     <script type="module">
       import { draw } from "./draw.js";
+      import { generateTerrain } from "./terrainGeneration.js";
       import {
         hexToPixel,
         pixelToHex,
@@ -413,20 +414,20 @@
       }
 
       // Generate terrain for a hex
-      function generateTerrain(col, row) {
-        const noise = pseudoNoise(col, row);
-        if (noise < -0.5) return TERRAIN.WATER;
-        if (noise < -0.2) return TERRAIN.SAND;
-        if (noise < 0.3) return TERRAIN.GRASS;
-        if (noise < 0.6) return TERRAIN.FOREST;
-        return TERRAIN.MOUNTAIN;
-      }
+      // function generateTerrain(col, row) {
+      //   const noise = pseudoNoise(col, row);
+      //   if (noise < -0.5) return TERRAIN.WATER;
+      //   if (noise < -0.2) return TERRAIN.SAND;
+      //   if (noise < 0.3) return TERRAIN.GRASS;
+      //   if (noise < 0.6) return TERRAIN.FOREST;
+      //   return TERRAIN.MOUNTAIN;
+      // }
 
       // Get or create hex
       function getHex(col, row) {
         const key = `${col},${row}`;
         if (!map[key]) {
-          map[key] = { col, row, terrain: generateTerrain(col, row) };
+          map[key] = { col, row, terrain: generateTerrain(col, row, TERRAIN) };
         }
         return map[key];
       }
@@ -870,6 +871,19 @@
           hoveredElement = null;
           //draw(ctx, getDrawParams());
         }
+      });
+      window.addEventListener("terrainRegenerate", () => {
+        console.log("🔄 Regenerating world...");
+
+        // Clear the existing map completely
+        for (let key in map) {
+          delete map[key];
+        }
+
+        // Reinitialize visible map with new terrain
+        initializeVisibleMap();
+
+        console.log("✅ World regenerated!");
       });
 
       canvas.addEventListener(
