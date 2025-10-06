@@ -116,6 +116,7 @@
       </button>
       <button class="mode-button" data-mode="remove">❌ Remove Track</button>
       <button class="mode-button" data-mode="train">🚆 Place Train</button>
+      <button class="mode-button" data-mode="building">🏢 Place Building</button>
     </div>
 
     <script type="module">
@@ -164,11 +165,13 @@
       const OBJECT_TYPES = {
         TRACK: "track",
         TRAIN: "train",
+        BUILDING: "building",
       };
 
       // Map and objects storage
       const map = {};
-      const objects = {};
+      const placed_tracks = {};
+      const placed_buildings = {};
       const trains = [];
       let nextTrainId = 1;
 
@@ -188,29 +191,6 @@
         width = size * 2;
         height = Math.sqrt(3) * size;
       }
-
-      // Get the neighbor hex for a given side
-      // function getNeighbor(col, row, side) {
-      //   const isEven = col % 2 === 0;
-      //   const neighbors = isEven
-      //     ? [
-      //         [col + 1, row],
-      //         [col, row + 1],
-      //         [col - 1, row],
-      //         [col - 1, row - 1],
-      //         [col, row - 1],
-      //         [col + 1, row - 1],
-      //       ]
-      //     : [
-      //         [col + 1, row + 1],
-      //         [col, row + 1],
-      //         [col - 1, row + 1],
-      //         [col - 1, row],
-      //         [col, row - 1],
-      //         [col + 1, row],
-      //       ];
-      //   return { col: neighbors[side][0], row: neighbors[side][1] };
-      // }
 
       // Get all neighbors for debugging
       function getAllNeighbors(col, row) {
@@ -282,8 +262,8 @@
         }
 
         // Build graph from all track objects
-        for (let edgeKey in objects) {
-          const obj = objects[edgeKey];
+        for (let edgeKey in placed_tracks) {
+          const obj = placed_tracks[edgeKey];
           if (obj.type === OBJECT_TYPES.TRACK) {
             // Find which side this edge is on hex1
             let side = -1;
@@ -351,7 +331,7 @@
 
       // Transition train to a new track segment
       function transitionTrainToNewTrack(train, newEdgeKey) {
-        const newTrack = objects[newEdgeKey];
+        const newTrack = placed_tracks[newEdgeKey];
         if (!newTrack) return false;
 
         // Get current vertex the train is at
@@ -401,27 +381,6 @@
         return true;
       }
 
-      // Simple noise-like function for terrain generation
-      function pseudoNoise(col, row) {
-        let x = col * 0.1;
-        let y = row * 0.1;
-        return (
-          (Math.sin(x * 3.5 + y * 2.1) +
-            Math.sin(x * 2.3 - y * 1.7) +
-            Math.sin(x * 1.1 + y * 3.3)) /
-          3
-        );
-      }
-
-      // Generate terrain for a hex
-      // function generateTerrain(col, row) {
-      //   const noise = pseudoNoise(col, row);
-      //   if (noise < -0.5) return TERRAIN.WATER;
-      //   if (noise < -0.2) return TERRAIN.SAND;
-      //   if (noise < 0.3) return TERRAIN.GRASS;
-      //   if (noise < 0.6) return TERRAIN.FOREST;
-      //   return TERRAIN.MOUNTAIN;
-      // }
 
       // Get or create hex
       function getHex(col, row) {
@@ -431,54 +390,6 @@
         }
         return map[key];
       }
-
-      // Convert grid coordinates to pixel coordinates
-      // function hexToPixel(col, row) {
-      //   const x = col * width * 0.75;
-      //   const y = row * height + ((Math.abs(col) % 2) * height) / 2;
-      //   return { x, y };
-      // }
-
-      // Convert pixel coordinates to grid coordinates
-      // function pixelToHex(x, y) {
-      //   const q = ((2 / 3) * x) / size;
-      //   const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
-
-      //   let cubeQ = q;
-      //   let cubeR = r;
-      //   let cubeS = -q - r;
-
-      //   let rq = Math.round(cubeQ);
-      //   let rr = Math.round(cubeR);
-      //   let rs = Math.round(cubeS);
-
-      //   const q_diff = Math.abs(rq - cubeQ);
-      //   const r_diff = Math.abs(rr - cubeR);
-      //   const s_diff = Math.abs(rs - cubeS);
-
-      //   if (q_diff > r_diff && q_diff > s_diff) {
-      //     rq = -rr - rs;
-      //   } else if (r_diff > s_diff) {
-      //     rr = -rq - rs;
-      //   }
-
-      //   const col = rq;
-      //   const row = rr + Math.floor(rq / 2);
-
-      //   return { col, row };
-      // }
-
-      // Get the 6 vertices of a hex in pixel coordinates
-      // function getHexVertices(centerX, centerY) {
-      //   const angles = [0, 60, 120, 180, 240, 300];
-      //   return angles.map((angle) => {
-      //     const angleRad = (Math.PI / 180) * angle;
-      //     return {
-      //       x: centerX + size * Math.cos(angleRad),
-      //       y: centerY + size * Math.sin(angleRad),
-      //     };
-      //   });
-      // }
 
       // Distance between two points
       function distance(x1, y1, x2, y2) {
@@ -615,7 +526,8 @@
         return {
           canvas,
           map,
-          objects,
+          placed_tracks,
+          placed_buildings,
           trains,
           camera,
           hoveredElement,
@@ -635,6 +547,26 @@
         if (!element) return;
 
         if (element.type === "tile") {
+          // Building placement
+          if (currentMode === "building") {
+            const tileKey = `${element.col},${element.row}`;
+            if (!placed_buildings[tileKey]) {
+              placed_buildings[tileKey] = {
+                type: OBJECT_TYPES.BUILDING,
+                col: element.col,
+                row: element.row,
+                placedAt: Date.now(),
+              };
+              console.log("🏢 BUILDING PLACED", {
+                tileKey,
+                col: element.col,
+                row: element.row,
+              });
+            }
+            return;
+          }
+
+          // Debug info
           console.log("═══════════════════════════════════════");
           console.log("🔍 TILE DEBUG INFO");
           console.log("═══════════════════════════════════════");
@@ -671,13 +603,13 @@
           const edgeKey = element.edgeKey;
 
           if (currentMode === "place") {
-            if (!objects[edgeKey]) {
+            if (!placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
                 element.row,
                 element.side
               );
-              objects[edgeKey] = {
+              placed_tracks[edgeKey] = {
                 type: OBJECT_TYPES.TRACK,
                 hex1: { col: element.col, row: element.row },
                 hex2: { col: neighbor.col, row: neighbor.row },
@@ -689,17 +621,15 @@
                 hex2: `(${neighbor.col}, ${neighbor.row})`,
               });
               rebuildTrackGraph();
-              //draw(ctx, getDrawParams());
             }
           } else if (currentMode === "remove") {
-            if (objects[edgeKey]) {
-              delete objects[edgeKey];
+            if (placed_tracks[edgeKey]) {
+              delete placed_tracks[edgeKey];
               console.log("🗑️ TRACK REMOVED", { edgeKey });
               rebuildTrackGraph();
-              //draw(ctx, getDrawParams());
             }
           } else if (currentMode === "train") {
-            if (objects[edgeKey]) {
+            if (placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
                 element.row,
@@ -720,7 +650,6 @@
                 hex1: `(${element.col}, ${element.row})`,
                 hex2: `(${neighbor.col}, ${neighbor.row})`,
               });
-              //draw(ctx, getDrawParams());
             }
           }
         }
@@ -783,7 +712,6 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         initializeVisibleMap();
-        //draw(ctx, getDrawParams());
       }
 
       // Handle zoom
@@ -805,7 +733,6 @@
         camera.y = mouseY - worldY * (zoom / oldZoom);
 
         initializeVisibleMap();
-        //draw(ctx, getDrawParams());
       }
 
       // Mode button handlers
@@ -843,13 +770,11 @@
           camera.y += dy;
           lastMousePos = { x: e.clientX, y: e.clientY };
           initializeVisibleMap();
-          //draw(ctx, getDrawParams());
         } else {
           const newHovered = findHoveredElement(e.clientX, e.clientY);
 
           if (JSON.stringify(newHovered) !== JSON.stringify(hoveredElement)) {
             hoveredElement = newHovered;
-            //draw(ctx, getDrawParams());
           }
         }
       });
@@ -869,9 +794,9 @@
         isDragging = false;
         if (hoveredElement) {
           hoveredElement = null;
-          //draw(ctx, getDrawParams());
         }
       });
+
       window.addEventListener("terrainRegenerate", () => {
         console.log("🔄 Regenerating world...");
 
@@ -943,11 +868,10 @@
           camera.y += dy;
           lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           initializeVisibleMap();
-          //draw(ctx, getDrawParams());
         }
       });
 
-      canvas.addEventListener("touchend", (e) => {
+ canvas.addEventListener("touchend", (e) => {
         e.preventDefault();
 
         if (!hasDragged && e.changedTouches.length > 0) {

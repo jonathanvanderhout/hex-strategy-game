@@ -185,6 +185,77 @@ function drawEdgeHighlight(ctx, centerX, centerY, edgeIndex, size, zoom) {
   ctx.fill();
 }
 
+// Draw a building on a hex tile
+function drawBuilding(ctx, col, row, camera, size, zoom) {
+  const pos = hexToPixel(col, row, size);
+  const screenX = pos.x + camera.x;
+  const screenY = pos.y + camera.y;
+
+  // Building dimensions
+  const buildingSize = size * 0.5;
+  const roofHeight = buildingSize * 0.3;
+
+  ctx.save();
+
+  // Draw building body (rectangle)
+  ctx.fillStyle = "#8b4513";
+  ctx.fillRect(
+    screenX - buildingSize / 2,
+    screenY - buildingSize / 2,
+    buildingSize,
+    buildingSize
+  );
+  ctx.strokeStyle = "#654321";
+  ctx.lineWidth = 2 * zoom;
+  ctx.strokeRect(
+    screenX - buildingSize / 2,
+    screenY - buildingSize / 2,
+    buildingSize,
+    buildingSize
+  );
+
+  // Draw roof (triangle)
+  ctx.fillStyle = "#a0522d";
+  ctx.beginPath();
+  ctx.moveTo(screenX - buildingSize / 2 - 5, screenY - buildingSize / 2);
+  ctx.lineTo(screenX, screenY - buildingSize / 2 - roofHeight);
+  ctx.lineTo(screenX + buildingSize / 2 + 5, screenY - buildingSize / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Draw door
+  const doorWidth = buildingSize * 0.25;
+  const doorHeight = buildingSize * 0.4;
+  ctx.fillStyle = "#4a2511";
+  ctx.fillRect(
+    screenX - doorWidth / 2,
+    screenY + buildingSize / 2 - doorHeight,
+    doorWidth,
+    doorHeight
+  );
+
+  // Draw windows
+  const windowSize = buildingSize * 0.15;
+  ctx.fillStyle = "#87ceeb";
+  // Left window
+  ctx.fillRect(
+    screenX - buildingSize / 3,
+    screenY - buildingSize / 4,
+    windowSize,
+    windowSize
+  );
+  // Right window
+  ctx.fillRect(
+    screenX + buildingSize / 3 - windowSize,
+    screenY - buildingSize / 4,
+    windowSize,
+    windowSize
+  );
+
+  ctx.restore();
+}
+
 // Draw a train track between two hexes
 function drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom) {
   const pos1 = hexToPixel(hex1.col, hex1.row, size);
@@ -367,20 +438,21 @@ function getVisibleHexRange(canvas, camera, size) {
  */
 export function draw(ctx, params) {
   const {
-    canvas,
-    map,
-    objects,
-    trains,
-    camera,
-    hoveredElement,
-    size,
-    zoom,
-    TERRAIN,
-    OBJECT_TYPES,
-    tileCountEl,
-    zoomLevelEl,
-    trackCountEl,
-    trainCountEl,
+          canvas,
+          map,
+          placed_tracks,
+          placed_buildings,
+          trains,
+          camera,
+          hoveredElement,
+          size,
+          zoom,
+          TERRAIN,
+          OBJECT_TYPES,
+          tileCountEl,
+          zoomLevelEl,
+          trackCountEl,
+          trainCountEl,
   } = params;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -421,8 +493,8 @@ export function draw(ctx, params) {
 
   // Draw all objects (tracks, etc.)
   let trackCount = 0;
-  for (const key in objects) {
-    const obj = objects[key];
+  for (const key in placed_tracks) {
+    const obj = placed_tracks[key];
 
     if (obj.type === OBJECT_TYPES.TRACK) {
       trackCount++;
@@ -444,6 +516,20 @@ export function draw(ctx, params) {
       if (inRange) {
         drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom);
       }
+    }
+  }
+    for (const tileKey in placed_buildings) {
+    const building = placed_buildings[tileKey];
+
+    // Check if building is in visible range
+    const inRange =
+      building.col >= range.minCol &&
+      building.col <= range.maxCol &&
+      building.row >= range.minRow &&
+      building.row <= range.maxRow;
+
+    if (inRange) {
+      drawBuilding(ctx, building.col, building.row, camera, size, zoom);
     }
   }
 
