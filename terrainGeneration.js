@@ -2,16 +2,16 @@
 let WORLD_SEED = 12345;
 let permutation = [];
 
-// Configuration parameters
+// Configuration parameters (internal values still use -1 to 1 range)
 let config = {
   seed: 12345,
   scale: 0.08,
   octaves: 4,
-  waterThreshold: -0.35,
-  sandThreshold: -0.15,
-  grassThreshold: 0.15,
-  forestThreshold: 0.35,
-  mountainThreshold: 0.55
+  waterPercent: 32.5,      // % of world that is water
+  sandPercent: 25,         // % of world that is sand
+  grassPercent: 10,        // % of world that is grass
+  forestPercent: 10,       // % of world that is forest
+  mountainPercent: 22.5    // % of world that is mountain
 };
 
 // Seeded random number generator
@@ -43,6 +43,7 @@ function generatePermutationTable(seed) {
 function initPermutation() {
   WORLD_SEED = config.seed;
   permutation = generatePermutationTable(WORLD_SEED);
+  calculateThresholdsFromPercentages();
 }
 
 initPermutation();
@@ -103,21 +104,53 @@ function multiOctaveNoise(x, y, octaves = 4) {
     frequency *= 2;
   }
   
-  return value / maxValue;
+  const normalized = value / maxValue;
+  const stretched = Math.max(-1, Math.min(1, normalized / 0.7));
+  
+  return stretched;
+}
+
+// Sample noise to build distribution
+function sampleNoiseDistribution(samples = 10000) {
+  const noiseValues = [];
+  
+  for (let i = 0; i < samples; i++) {
+    const x = Math.random() * 100;
+    const y = Math.random() * 100;
+    const noise = multiOctaveNoise(x * config.scale, y * config.scale, config.octaves);
+    noiseValues.push(noise);
+  }
+  
+  noiseValues.sort((a, b) => a - b);
+  return noiseValues;
+}
+
+// Calculate thresholds based on desired percentages
+function calculateThresholdsFromPercentages() {
+  const noiseValues = sampleNoiseDistribution();
+  const total = noiseValues.length;
+  
+  // Calculate cumulative percentages
+  const waterEnd = config.waterPercent / 100;
+  const sandEnd = waterEnd + (config.sandPercent / 100);
+  const grassEnd = sandEnd + (config.grassPercent / 100);
+  const forestEnd = grassEnd + (config.forestPercent / 100);
+  
+  // Find thresholds at these percentiles
+  config.sandThreshold = noiseValues[Math.floor(waterEnd * total)];
+  config.grassThreshold = noiseValues[Math.floor(sandEnd * total)];
+  config.forestThreshold = noiseValues[Math.floor(grassEnd * total)];
+  config.mountainThreshold = noiseValues[Math.floor(forestEnd * total)];
 }
 
 // Generate terrain for a hex
 export function generateTerrain(col, row, TERRAIN) {
-  // Get noise value for this hex
   const noiseValue = multiOctaveNoise(col * config.scale, row * config.scale, config.octaves);
   
-  // Map noise value to terrain types
-  if (noiseValue < config.waterThreshold) return TERRAIN.WATER;
-  if (noiseValue < config.sandThreshold) return TERRAIN.SAND;
-  if (noiseValue < config.grassThreshold) return TERRAIN.GRASS;
-  if (noiseValue < config.forestThreshold) return TERRAIN.FOREST;
-  if (noiseValue < config.mountainThreshold) return TERRAIN.MOUNTAIN;
-  // Everything above mountain threshold is also mountain (no new terrain type)
+  if (noiseValue < config.sandThreshold) return TERRAIN.WATER;
+  if (noiseValue < config.grassThreshold) return TERRAIN.SAND;
+  if (noiseValue < config.forestThreshold) return TERRAIN.GRASS;
+  if (noiseValue < config.mountainThreshold) return TERRAIN.FOREST;
   return TERRAIN.MOUNTAIN;
 }
 
@@ -126,6 +159,8 @@ export function updateConfig(newConfig) {
   Object.assign(config, newConfig);
   if (newConfig.seed !== undefined) {
     initPermutation();
+  } else {
+    calculateThresholdsFromPercentages();
   }
 }
 
@@ -149,7 +184,7 @@ function createTerrainControls() {
         padding: 15px;
         border-radius: 8px;
         font-size: 12px;
-        max-width: 280px;
+        max-width: 320px;
         font-family: Arial, sans-serif;
       }
       #terrain-controls h3 {
@@ -185,6 +220,69 @@ function createTerrainControls() {
         color: #ffcc00;
         font-weight: bold;
       }
+      
+      /* Multi-handle slider */
+      .multi-slider-container {
+        margin: 20px 0;
+        padding: 10px 0;
+      }
+      .multi-slider-label {
+        font-size: 11px;
+        color: #ccc;
+        margin-bottom: 8px;
+      }
+      .multi-slider {
+        position: relative;
+        height: 40px;
+        background: linear-gradient(to right, 
+          #1e3a8a 0%, 
+          #1e3a8a 32.5%,
+          #d4a574 32.5%,
+          #d4a574 57.5%,
+          #4ade80 57.5%,
+          #4ade80 67.5%,
+          #22c55e 67.5%,
+          #22c55e 77.5%,
+          #78716c 77.5%,
+          #78716c 100%
+        );
+        border-radius: 5px;
+        margin-bottom: 30px;
+      }
+      .slider-handle {
+        position: absolute;
+        top: -5px;
+        width: 3px;
+        height: 50px;
+        background: white;
+        cursor: ew-resize;
+        box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        z-index: 10;
+      }
+      .slider-handle:hover {
+        background: #ffcc00;
+      }
+      .slider-handle.dragging {
+        background: #ffd700;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+      }
+      .slider-label {
+        position: absolute;
+        bottom: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 9px;
+        white-space: nowrap;
+        color: #aaa;
+      }
+      .terrain-legend {
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        margin-top: 5px;
+        color: #aaa;
+      }
+      
       .preset-buttons {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -236,29 +334,31 @@ function createTerrainControls() {
       <input type="range" id="octaves-input" min="1" max="8" step="1" value="${config.octaves}" />
     </div>
     
-    <div class="control-group">
-      <label>Water <span class="control-value" id="water-value">${config.waterThreshold}</span></label>
-      <input type="range" id="water-input" min="-1" max="0" step="0.05" value="${config.waterThreshold}" />
-    </div>
-    
-    <div class="control-group">
-      <label>Sand <span class="control-value" id="sand-value">${config.sandThreshold}</span></label>
-      <input type="range" id="sand-input" min="-1" max="1" step="0.05" value="${config.sandThreshold}" />
-    </div>
-    
-    <div class="control-group">
-      <label>Grass <span class="control-value" id="grass-value">${config.grassThreshold}</span></label>
-      <input type="range" id="grass-input" min="-1" max="1" step="0.05" value="${config.grassThreshold}" />
-    </div>
-    
-    <div class="control-group">
-      <label>Forest <span class="control-value" id="forest-value">${config.forestThreshold}</span></label>
-      <input type="range" id="forest-input" min="-1" max="1" step="0.05" value="${config.forestThreshold}" />
-    </div>
-    
-    <div class="control-group">
-      <label>Mountain <span class="control-value" id="mountain-value">${config.mountainThreshold}</span></label>
-      <input type="range" id="mountain-input" min="-1" max="1" step="0.05" value="${config.mountainThreshold}" />
+    <div class="multi-slider-container">
+      <div class="multi-slider-label">
+        Terrain Distribution
+      </div>
+      <div class="multi-slider" id="multi-slider">
+        <div class="slider-handle" data-terrain="sand" style="left: ${config.waterPercent}%">
+          <div class="slider-label">🏖️ ${config.waterPercent}%</div>
+        </div>
+        <div class="slider-handle" data-terrain="grass" style="left: ${config.waterPercent + config.sandPercent}%">
+          <div class="slider-label">🌱 ${config.waterPercent + config.sandPercent}%</div>
+        </div>
+        <div class="slider-handle" data-terrain="forest" style="left: ${config.waterPercent + config.sandPercent + config.grassPercent}%">
+          <div class="slider-label">🌲 ${config.waterPercent + config.sandPercent + config.grassPercent}%</div>
+        </div>
+        <div class="slider-handle" data-terrain="mountain" style="left: ${config.waterPercent + config.sandPercent + config.grassPercent + config.forestPercent}%">
+          <div class="slider-label">⛰️ ${config.waterPercent + config.sandPercent + config.grassPercent + config.forestPercent}%</div>
+        </div>
+      </div>
+      <div class="terrain-legend">
+        <span>💧 Water</span>
+        <span>🏖️ Sand</span>
+        <span>🌱 Grass</span>
+        <span>🌲 Forest</span>
+        <span>⛰️ Mountain</span>
+      </div>
     </div>
     
     <div class="preset-buttons">
@@ -273,7 +373,152 @@ function createTerrainControls() {
   
   document.body.appendChild(controlsDiv);
   
-  // Attach event listeners
+  // Multi-slider functionality
+  const slider = document.getElementById('multi-slider');
+  const handles = slider.querySelectorAll('.slider-handle');
+  let draggingHandle = null;
+  
+  const terrainOrder = ['sand', 'grass', 'forest', 'mountain'];
+  
+  function updateSliderGradient() {
+    const p1 = config.waterPercent;
+    const p2 = p1 + config.sandPercent;
+    const p3 = p2 + config.grassPercent;
+    const p4 = p3 + config.forestPercent;
+    
+    slider.style.background = `linear-gradient(to right, 
+      #1e3a8a 0%, 
+      #1e3a8a ${p1}%,
+      #d4a574 ${p1}%,
+      #d4a574 ${p2}%,
+      #4ade80 ${p2}%,
+      #4ade80 ${p3}%,
+      #22c55e ${p3}%,
+      #22c55e ${p4}%,
+      #78716c ${p4}%,
+      #78716c 100%
+    )`;
+  }
+  
+  function updateAllHandlePositions() {
+    // Update all handle positions based on config
+    const sandHandle = slider.querySelector('[data-terrain="sand"]');
+    const grassHandle = slider.querySelector('[data-terrain="grass"]');
+    const forestHandle = slider.querySelector('[data-terrain="forest"]');
+    const mountainHandle = slider.querySelector('[data-terrain="mountain"]');
+    
+    const p1 = config.waterPercent;
+    const p2 = p1 + config.sandPercent;
+    const p3 = p2 + config.grassPercent;
+    const p4 = p3 + config.forestPercent;
+    
+    sandHandle.style.left = p1 + '%';
+    sandHandle.querySelector('.slider-label').textContent = '🏖️ ' + Math.round(p1) + '%';
+    
+    grassHandle.style.left = p2 + '%';
+    grassHandle.querySelector('.slider-label').textContent = '🌱 ' + Math.round(p2) + '%';
+    
+    forestHandle.style.left = p3 + '%';
+    forestHandle.querySelector('.slider-label').textContent = '🌲 ' + Math.round(p3) + '%';
+    
+    mountainHandle.style.left = p4 + '%';
+    mountainHandle.querySelector('.slider-label').textContent = '⛰️ ' + Math.round(p4) + '%';
+  }
+  
+  function setHandlePosition(handle, position) {
+    const terrain = handle.getAttribute('data-terrain');
+    
+    // Get current cumulative positions
+    const sandPos = parseFloat(slider.querySelector('[data-terrain="sand"]').style.left);
+    const grassPos = parseFloat(slider.querySelector('[data-terrain="grass"]').style.left);
+    const forestPos = parseFloat(slider.querySelector('[data-terrain="forest"]').style.left);
+    const mountainPos = parseFloat(slider.querySelector('[data-terrain="mountain"]').style.left);
+    
+    // Update config based on which handle moved
+    switch(terrain) {
+      case 'sand':
+        config.waterPercent = position;
+        config.sandPercent = grassPos - position;
+        break;
+      case 'grass':
+        config.sandPercent = position - sandPos;
+        config.grassPercent = forestPos - position;
+        break;
+      case 'forest':
+        config.grassPercent = position - grassPos;
+        config.forestPercent = mountainPos - position;
+        break;
+      case 'mountain':
+        config.forestPercent = position - forestPos;
+        break;
+    }
+    
+    // Mountain percentage is whatever's left
+    const usedPercent = config.waterPercent + config.sandPercent + config.grassPercent + config.forestPercent;
+    config.mountainPercent = 100 - usedPercent;
+    
+    // Update all handle positions to reflect new config
+    updateAllHandlePositions();
+    updateSliderGradient();
+    calculateThresholdsFromPercentages();
+  }
+  
+  handles.forEach(handle => {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      draggingHandle = handle;
+      handle.classList.add('dragging');
+    });
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!draggingHandle) return;
+    
+    const sliderRect = slider.getBoundingClientRect();
+    let position = ((e.clientX - sliderRect.left) / sliderRect.width) * 100;
+    position = Math.max(0, Math.min(100, position));
+    
+    // Get current positions of all handles
+    const sandPos = parseFloat(slider.querySelector('[data-terrain="sand"]').style.left);
+    const grassPos = parseFloat(slider.querySelector('[data-terrain="grass"]').style.left);
+    const forestPos = parseFloat(slider.querySelector('[data-terrain="forest"]').style.left);
+    const mountainPos = parseFloat(slider.querySelector('[data-terrain="mountain"]').style.left);
+    
+    // Get constraints based on adjacent handles
+    const terrain = draggingHandle.getAttribute('data-terrain');
+    
+    let minPos = 1;
+    let maxPos = 99;
+    
+    switch(terrain) {
+      case 'sand':
+        maxPos = grassPos - 1;
+        break;
+      case 'grass':
+        minPos = sandPos + 1;
+        maxPos = forestPos - 1;
+        break;
+      case 'forest':
+        minPos = grassPos + 1;
+        maxPos = mountainPos - 1;
+        break;
+      case 'mountain':
+        minPos = forestPos + 1;
+        break;
+    }
+    
+    position = Math.max(minPos, Math.min(maxPos, position));
+    setHandlePosition(draggingHandle, position);
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (draggingHandle) {
+      draggingHandle.classList.remove('dragging');
+      draggingHandle = null;
+    }
+  });
+  
+  // Regular controls
   const updateValue = (id, value) => {
     document.getElementById(id).textContent = value;
   };
@@ -286,36 +531,13 @@ function createTerrainControls() {
   document.getElementById('scale-input').addEventListener('input', (e) => {
     config.scale = parseFloat(e.target.value);
     updateValue('scale-value', config.scale.toFixed(2));
+    calculateThresholdsFromPercentages();
   });
   
   document.getElementById('octaves-input').addEventListener('input', (e) => {
     config.octaves = parseInt(e.target.value);
     updateValue('octaves-value', config.octaves);
-  });
-  
-  document.getElementById('water-input').addEventListener('input', (e) => {
-    config.waterThreshold = parseFloat(e.target.value);
-    updateValue('water-value', config.waterThreshold.toFixed(2));
-  });
-  
-  document.getElementById('sand-input').addEventListener('input', (e) => {
-    config.sandThreshold = parseFloat(e.target.value);
-    updateValue('sand-value', config.sandThreshold.toFixed(2));
-  });
-  
-  document.getElementById('grass-input').addEventListener('input', (e) => {
-    config.grassThreshold = parseFloat(e.target.value);
-    updateValue('grass-value', config.grassThreshold.toFixed(2));
-  });
-  
-  document.getElementById('forest-input').addEventListener('input', (e) => {
-    config.forestThreshold = parseFloat(e.target.value);
-    updateValue('forest-value', config.forestThreshold.toFixed(2));
-  });
-  
-  document.getElementById('mountain-input').addEventListener('input', (e) => {
-    config.mountainThreshold = parseFloat(e.target.value);
-    updateValue('mountain-value', config.mountainThreshold.toFixed(2));
+    calculateThresholdsFromPercentages();
   });
   
   // Preset buttons
@@ -323,38 +545,38 @@ function createTerrainControls() {
     archipelago: {
       scale: 0.12,
       octaves: 5,
-      waterThreshold: -0.2,
-      sandThreshold: -0.05,
-      grassThreshold: 0.15,
-      forestThreshold: 0.35,
-      mountainThreshold: 0.55
+      waterPercent: 45,
+      sandPercent: 15,
+      grassPercent: 15,
+      forestPercent: 15,
+      mountainPercent: 10
     },
     pangaea: {
       scale: 0.05,
       octaves: 3,
-      waterThreshold: -0.4,
-      sandThreshold: -0.2,
-      grassThreshold: 0.2,
-      forestThreshold: 0.4,
-      mountainThreshold: 0.6
+      waterPercent: 25,
+      sandPercent: 20,
+      grassPercent: 25,
+      forestPercent: 20,
+      mountainPercent: 10
     },
     chaotic: {
       scale: 0.15,
       octaves: 6,
-      waterThreshold: -0.35,
-      sandThreshold: -0.15,
-      grassThreshold: 0.15,
-      forestThreshold: 0.35,
-      mountainThreshold: 0.55
+      waterPercent: 30,
+      sandPercent: 20,
+      grassPercent: 20,
+      forestPercent: 15,
+      mountainPercent: 15
     },
     forest: {
       scale: 0.08,
       octaves: 4,
-      waterThreshold: -0.4,
-      sandThreshold: -0.2,
-      grassThreshold: 0.3,
-      forestThreshold: 0.6,
-      mountainThreshold: 0.8
+      waterPercent: 20,
+      sandPercent: 10,
+      grassPercent: 15,
+      forestPercent: 40,
+      mountainPercent: 15
     }
   };
   
@@ -363,27 +585,16 @@ function createTerrainControls() {
       const preset = presets[btn.dataset.preset];
       Object.assign(config, preset);
       
-      // Update all UI elements
+      // Update regular controls
       document.getElementById('scale-input').value = config.scale;
       updateValue('scale-value', config.scale.toFixed(2));
       
       document.getElementById('octaves-input').value = config.octaves;
       updateValue('octaves-value', config.octaves);
       
-      document.getElementById('water-input').value = config.waterThreshold;
-      updateValue('water-value', config.waterThreshold.toFixed(2));
-      
-      document.getElementById('sand-input').value = config.sandThreshold;
-      updateValue('sand-value', config.sandThreshold.toFixed(2));
-      
-      document.getElementById('grass-input').value = config.grassThreshold;
-      updateValue('grass-value', config.grassThreshold.toFixed(2));
-      
-      document.getElementById('forest-input').value = config.forestThreshold;
-      updateValue('forest-value', config.forestThreshold.toFixed(2));
-      
-      document.getElementById('mountain-input').value = config.mountainThreshold;
-      updateValue('mountain-value', config.mountainThreshold.toFixed(2));
+      // Update slider handles
+      updateAllHandlePositions();
+      updateSliderGradient();
       
       // Trigger regeneration
       document.getElementById('regenerate-btn').click();
@@ -393,7 +604,6 @@ function createTerrainControls() {
   // Regenerate button
   document.getElementById('regenerate-btn').addEventListener('click', () => {
     initPermutation();
-    // Dispatch custom event that the main app can listen to
     window.dispatchEvent(new CustomEvent('terrainRegenerate'));
   });
 }
