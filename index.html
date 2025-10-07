@@ -116,18 +116,22 @@
       </button>
       <button class="mode-button" data-mode="remove">❌ Remove Track</button>
       <button class="mode-button" data-mode="train">🚆 Place Train</button>
-      <button class="mode-button" data-mode="building">🏢 Place Building</button>
+      <button class="mode-button" data-mode="building">
+        🏢 Place Building
+      </button>
     </div>
 
     <script type="module">
       import { draw } from "./draw.js";
-      import { generateTerrain } from "./terrainGeneration.js";
+      import { generateTerrain, getConfig, updateConfig} from "./terrainGeneration.js";
       import {
         hexToPixel,
         pixelToHex,
         getHexVertices,
         getNeighbor,
       } from "./hexUtils.js";
+     import { SaveGameManager, createSaveLoadButton } from './savegame.js';
+
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -169,21 +173,29 @@
       };
 
       // Map and objects storage
-      const map = {};
-      const placed_tracks = {};
-      const placed_buildings = {};
-      const trains = [];
-      let nextTrainId = 1;
+      // const placed_buildings = {};
+      // const trains = [];
+      // let nextTrainId = 1;
 
       // Track network graph - maps vertex keys to connected edges
       const trackGraph = {};
 
       // Camera position
-      let camera = { x: 0, y: 0 };
+      // let camera = { x: 0, y: 0 };
       let isDragging = false;
       let dragStartPos = { x: 0, y: 0 };
       let hasDragged = false;
       let lastMousePos = { x: 0, y: 0 };
+
+      const gameState = {
+        placed_tracks: {},
+        placed_buildings: {},
+        trains: [],
+        nextTrainId: 1,
+        camera: { x: 0, y: 0 },
+        terrainConfig: getConfig()
+      };
+      const map = {} // not saved because it can just be regenerated. 
 
       // Update size based on zoom
       function updateSizeFromZoom() {
@@ -262,8 +274,8 @@
         }
 
         // Build graph from all track objects
-        for (let edgeKey in placed_tracks) {
-          const obj = placed_tracks[edgeKey];
+        for (let edgeKey in gameState.placed_tracks) {
+          const obj = gameState.placed_tracks[edgeKey];
           if (obj.type === OBJECT_TYPES.TRACK) {
             // Find which side this edge is on hex1
             let side = -1;
@@ -331,7 +343,7 @@
 
       // Transition train to a new track segment
       function transitionTrainToNewTrack(train, newEdgeKey) {
-        const newTrack = placed_tracks[newEdgeKey];
+        const newTrack = gameState.placed_tracks[newEdgeKey];
         if (!newTrack) return false;
 
         // Get current vertex the train is at
@@ -381,7 +393,6 @@
         return true;
       }
 
-
       // Get or create hex
       function getHex(col, row) {
         const key = `${col},${row}`;
@@ -417,8 +428,8 @@
 
       // Find what the mouse is hovering over
       function findHoveredElement(mouseX, mouseY) {
-        const worldX = mouseX - camera.x;
-        const worldY = mouseY - camera.y;
+        const worldX = mouseX - gameState.camera.x;
+        const worldY = mouseY - gameState.camera.y;
 
         const hexCoord = pixelToHex(worldX, worldY, size);
         const hexPos = hexToPixel(hexCoord.col, hexCoord.row, size);
@@ -493,13 +504,13 @@
       function getVisibleHexRange() {
         const margin = 3;
         const topLeft = pixelToHex(
-          -camera.x - width * margin,
-          -camera.y - height * margin,
+          -gameState.camera.x - width * margin,
+          -gameState.camera.y - height * margin,
           size
         );
         const bottomRight = pixelToHex(
-          -camera.x + canvas.width + width * margin,
-          -camera.y + canvas.height + height * margin,
+          -gameState.camera.x + canvas.width + width * margin,
+          -gameState.camera.y + canvas.height + height * margin,
           size
         );
 
@@ -525,11 +536,11 @@
       function getDrawParams() {
         return {
           canvas,
-          map,
-          placed_tracks,
-          placed_buildings,
-          trains,
-          camera,
+          map:map,
+          placed_tracks: gameState.placed_tracks,
+          placed_buildings:gameState.placed_buildings,
+          trains:gameState.trains,
+          camera:gameState.camera,
           hoveredElement,
           size,
           zoom,
@@ -550,8 +561,8 @@
           // Building placement
           if (currentMode === "building") {
             const tileKey = `${element.col},${element.row}`;
-            if (!placed_buildings[tileKey]) {
-              placed_buildings[tileKey] = {
+            if (!gameState.placed_buildings[tileKey]) {
+              gameState.placed_buildings[tileKey] = {
                 type: OBJECT_TYPES.BUILDING,
                 col: element.col,
                 row: element.row,
@@ -603,13 +614,13 @@
           const edgeKey = element.edgeKey;
 
           if (currentMode === "place") {
-            if (!placed_tracks[edgeKey]) {
+            if (!gameState.placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
                 element.row,
                 element.side
               );
-              placed_tracks[edgeKey] = {
+              gameState.placed_tracks[edgeKey] = {
                 type: OBJECT_TYPES.TRACK,
                 hex1: { col: element.col, row: element.row },
                 hex2: { col: neighbor.col, row: neighbor.row },
@@ -623,20 +634,20 @@
               rebuildTrackGraph();
             }
           } else if (currentMode === "remove") {
-            if (placed_tracks[edgeKey]) {
-              delete placed_tracks[edgeKey];
+            if (gameState.placed_tracks[edgeKey]) {
+              delete gameState.placed_tracks[edgeKey];
               console.log("🗑️ TRACK REMOVED", { edgeKey });
               rebuildTrackGraph();
             }
           } else if (currentMode === "train") {
-            if (placed_tracks[edgeKey]) {
+            if (gameState.placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
                 element.row,
                 element.side
               );
-              trains.push({
-                id: nextTrainId++,
+              gameState.trains.push({
+                id: gameState.nextTrainId++,
                 edgeKey: edgeKey,
                 hex1: { col: element.col, row: element.row },
                 hex2: { col: neighbor.col, row: neighbor.row },
@@ -645,7 +656,7 @@
                 speed: 0.02,
               });
               console.log("🚆 TRAIN PLACED", {
-                id: nextTrainId - 1,
+                id: gameState.nextTrainId - 1,
                 edgeKey,
                 hex1: `(${element.col}, ${element.row})`,
                 hex2: `(${neighbor.col}, ${neighbor.row})`,
@@ -657,7 +668,7 @@
 
       // Animate trains
       function animateTrains() {
-        trains.forEach((train) => {
+        gameState.trains.forEach((train) => {
           train.progress += train.speed * train.direction;
 
           // Check if train reached the end of the track
@@ -724,16 +735,53 @@
 
         if (oldZoom === zoom) return;
 
-        const worldX = mouseX - camera.x;
-        const worldY = mouseY - camera.y;
+        const worldX = mouseX - gameState.camera.x;
+        const worldY = mouseY - gameState.camera.y;
 
         updateSizeFromZoom();
 
-        camera.x = mouseX - worldX * (zoom / oldZoom);
-        camera.y = mouseY - worldY * (zoom / oldZoom);
+        gameState.camera.x = mouseX - worldX * (zoom / oldZoom);
+        gameState.camera.y = mouseY - worldY * (zoom / oldZoom);
 
         initializeVisibleMap();
       }
+      // Save/Load system
+      const saveGameManager = new SaveGameManager(gameState);
+      window.saveGameManager = saveGameManager;
+
+      const saveLoadBtn = createSaveLoadButton();
+      document.body.appendChild(saveLoadBtn);
+      saveLoadBtn.addEventListener('click', () => saveGameManager.show());
+
+      // Handle loading games
+      window.addEventListener('loadGame', (e) => {
+        const state = e.detail;
+        
+        // Clear existing state
+        for (let key in gameState.placed_tracks) delete gameState.placed_tracks[key];
+        for (let key in gameState.placed_buildings) delete gameState.placed_buildings[key];
+        gameState.trains.length = 0;
+        
+        // Restore terrain config first
+        updateConfig(state.terrainConfig);
+        gameState.terrainConfig = state.terrainConfig;
+        
+        // Restore game state
+        Object.assign(gameState.placed_tracks, state.placed_tracks);
+        Object.assign(gameState.placed_buildings, state.placed_buildings);
+        gameState.trains.push(...state.trains);
+        gameState.nextTrainId = state.nextTrainId;
+        gameState.camera = { ...state.camera };
+        
+        // Rebuild derived data
+        rebuildTrackGraph();
+        
+        // Clear and regenerate map with new terrain config
+        for (let key in map) delete map[key];
+        initializeVisibleMap();
+        
+        console.log('✅ Game loaded successfully!');
+      });
 
       // Mode button handlers
       document.querySelectorAll(".mode-button").forEach((button) => {
@@ -766,8 +814,8 @@
             hasDragged = true;
           }
 
-          camera.x += dx;
-          camera.y += dy;
+          gameState.camera.x += dx;
+          gameState.camera.y += dy;
           lastMousePos = { x: e.clientX, y: e.clientY };
           initializeVisibleMap();
         } else {
@@ -864,14 +912,14 @@
             hasDragged = true;
           }
 
-          camera.x += dx;
-          camera.y += dy;
+          gameState.camera.x += dx;
+          gameState.camera.y += dy;
           lastMousePos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           initializeVisibleMap();
         }
       });
 
- canvas.addEventListener("touchend", (e) => {
+      canvas.addEventListener("touchend", (e) => {
         e.preventDefault();
 
         if (!hasDragged && e.changedTouches.length > 0) {
