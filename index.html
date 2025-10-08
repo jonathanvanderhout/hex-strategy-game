@@ -123,15 +123,25 @@
 
     <script type="module">
       import { draw } from "./draw.js";
-      import { generateTerrain, getConfig, updateConfig} from "./terrainGeneration.js";
+      import {
+        generateTerrain,
+        getConfig,
+        updateConfig,
+      } from "./terrainGeneration.js";
       import {
         hexToPixel,
         pixelToHex,
         getHexVertices,
         getNeighbor,
       } from "./hexUtils.js";
-     import { SaveGameManager, createSaveLoadButton } from './savegame.js';
+      import {
+        BUILDING_TYPES,
+        getBuildingType,
+        canPlaceBuilding,
+      } from "./buildingTypes.js";
+      import { SaveGameManager, createSaveLoadButton } from "./savegame.js";
 
+      let selectedBuildingType = 'lumberyard';
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -193,9 +203,9 @@
         trains: [],
         nextTrainId: 1,
         camera: { x: 0, y: 0 },
-        terrainConfig: getConfig()
+        terrainConfig: getConfig(),
       };
-      const map = {} // not saved because it can just be regenerated. 
+      const map = {}; // not saved because it can just be regenerated.
 
       // Update size based on zoom
       function updateSizeFromZoom() {
@@ -536,11 +546,11 @@
       function getDrawParams() {
         return {
           canvas,
-          map:map,
+          map: map,
           placed_tracks: gameState.placed_tracks,
-          placed_buildings:gameState.placed_buildings,
-          trains:gameState.trains,
-          camera:gameState.camera,
+          placed_buildings: gameState.placed_buildings,
+          trains: gameState.trains,
+          camera: gameState.camera,
           hoveredElement,
           size,
           zoom,
@@ -561,19 +571,54 @@
           // Building placement
           if (currentMode === "building") {
             const tileKey = `${element.col},${element.row}`;
-            if (!gameState.placed_buildings[tileKey]) {
-              gameState.placed_buildings[tileKey] = {
-                type: OBJECT_TYPES.BUILDING,
-                col: element.col,
-                row: element.row,
-                placedAt: Date.now(),
-              };
-              console.log("🏢 BUILDING PLACED", {
-                tileKey,
-                col: element.col,
-                row: element.row,
-              });
+
+            // Check if tile already has a building
+            if (gameState.placed_buildings[tileKey]) {
+              console.log("⚠️ Tile already has a building");
+              return;
             }
+
+            // Get the terrain type of this tile
+            const hex = getHex(element.col, element.row);
+            const terrainType = hex.terrain.name.toUpperCase();
+
+            // Check if this building can be placed on this terrain
+            if (!canPlaceBuilding(selectedBuildingType, terrainType)) {
+              console.log(
+                "⚠️ Cannot place",
+                selectedBuildingType,
+                "on",
+                terrainType
+              );
+              return;
+            }
+
+            // Get the building definition
+            const buildingDef = getBuildingType(selectedBuildingType);
+
+            // Check if building is unlocked
+            if (!buildingDef.unlocked) {
+              console.log("🔒 Building not yet unlocked:", buildingDef.name);
+              return;
+            }
+
+            // Place the building
+            gameState.placed_buildings[tileKey] = {
+              type: selectedBuildingType, // 'farm', 'lumberyard', etc.
+              col: element.col,
+              row: element.row,
+              placedAt: Date.now(),
+              inventory: {}, // local resource storage
+              productionProgress: 0, // 0 to 1
+            };
+
+            console.log("🏢 BUILDING PLACED", {
+              type: buildingDef.name,
+              emoji: buildingDef.emoji,
+              tileKey,
+              terrain: terrainType,
+            });
+
             return;
           }
 
@@ -751,36 +796,38 @@
 
       const saveLoadBtn = createSaveLoadButton();
       document.body.appendChild(saveLoadBtn);
-      saveLoadBtn.addEventListener('click', () => saveGameManager.show());
+      saveLoadBtn.addEventListener("click", () => saveGameManager.show());
 
       // Handle loading games
-      window.addEventListener('loadGame', (e) => {
+      window.addEventListener("loadGame", (e) => {
         const state = e.detail;
-        
+
         // Clear existing state
-        for (let key in gameState.placed_tracks) delete gameState.placed_tracks[key];
-        for (let key in gameState.placed_buildings) delete gameState.placed_buildings[key];
+        for (let key in gameState.placed_tracks)
+          delete gameState.placed_tracks[key];
+        for (let key in gameState.placed_buildings)
+          delete gameState.placed_buildings[key];
         gameState.trains.length = 0;
-        
+
         // Restore terrain config first
         updateConfig(state.terrainConfig);
         gameState.terrainConfig = state.terrainConfig;
-        
+
         // Restore game state
         Object.assign(gameState.placed_tracks, state.placed_tracks);
         Object.assign(gameState.placed_buildings, state.placed_buildings);
         gameState.trains.push(...state.trains);
         gameState.nextTrainId = state.nextTrainId;
         gameState.camera = { ...state.camera };
-        
+
         // Rebuild derived data
         rebuildTrackGraph();
-        
+
         // Clear and regenerate map with new terrain config
         for (let key in map) delete map[key];
         initializeVisibleMap();
-        
-        console.log('✅ Game loaded successfully!');
+
+        console.log("✅ Game loaded successfully!");
       });
 
       // Mode button handlers

@@ -186,7 +186,12 @@ function drawEdgeHighlight(ctx, centerX, centerY, edgeIndex, size, zoom) {
 }
 
 // Draw a building on a hex tile
-function drawBuilding(ctx, col, row, camera, size, zoom) {
+function drawBuilding(ctx, col, row, camera, size, zoom){
+  
+  drawLumberyard(ctx, col, row, camera, size, zoom)
+
+}
+function drawLumberyard(ctx, col, row, camera, size, zoom) {
   const pos = hexToPixel(col, row, size);
   const screenX = pos.x + camera.x;
   const screenY = pos.y + camera.y;
@@ -529,7 +534,7 @@ export function draw(ctx, params) {
       building.row <= range.maxRow;
 
     if (inRange) {
-      drawBuilding(ctx, building.col, building.row, camera, size, zoom);
+      drawBuilding(ctx, building.col, building.row, camera, size, zoom, building);
     }
   }
 
