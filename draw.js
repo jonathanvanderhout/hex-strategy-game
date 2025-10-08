@@ -23,7 +23,12 @@
  */
 
 // Lighten a hex color
-import { hexToPixel, pixelToHex, getHexVertices, getNeighbor } from './hexUtils.js';
+import {
+  hexToPixel,
+  pixelToHex,
+  getHexVertices,
+  getNeighbor,
+} from "./hexUtils.js";
 function lightenColor(color, percent) {
   const num = parseInt(color.replace("#", ""), 16);
   const amt = Math.round(2.55 * percent);
@@ -186,76 +191,170 @@ function drawEdgeHighlight(ctx, centerX, centerY, edgeIndex, size, zoom) {
 }
 
 // Draw a building on a hex tile
-function drawBuilding(ctx, col, row, camera, size, zoom){
-  
-  drawLumberyard(ctx, col, row, camera, size, zoom)
+function drawBuilding(ctx, col, row, camera, size, zoom, building) {
+  switch (building.type) {
+    case "lumberyard": {
+      drawLumberyard(ctx, col, row, camera, size, zoom);
+      break;
+    }
+    case "hub": {
+      drawHub(ctx, col, row, camera, size, zoom);
+      break;
+    }
+  }
 
+  // drawLumberyard(ctx, col, row, camera, size, zoom);
 }
+
+function drawHub(ctx, col, row, camera, size, zoom) {
+  const pos = hexToPixel(col, row, size);
+  const screenX = pos.x + camera.x;
+  const screenY = pos.y + camera.y;
+  const buildingSize = size * 0.65;
+
+  ctx.save();
+
+  // Multi-building complex
+  const mainSize = buildingSize * 0.5;
+
+  // Main building
+  ctx.fillStyle = "#8b9dc3";
+  ctx.fillRect(
+    screenX - mainSize / 2,
+    screenY - mainSize / 2,
+    mainSize,
+    mainSize
+  );
+
+  // Roof
+  ctx.fillStyle = "#6a7ba3";
+  ctx.fillRect(screenX - mainSize / 2, screenY - mainSize / 2 - 8, mainSize, 8);
+
+  // Side annexes
+  ctx.fillStyle = "#9fafc9";
+  ctx.fillRect(
+    screenX - mainSize / 2 - mainSize * 0.3,
+    screenY - mainSize / 4,
+    mainSize * 0.3,
+    mainSize / 2
+  );
+  ctx.fillRect(
+    screenX + mainSize / 2,
+    screenY - mainSize / 4,
+    mainSize * 0.3,
+    mainSize / 2
+  );
+
+  // Windows grid
+  ctx.fillStyle = "#ffeb99";
+  const windowSize = mainSize * 0.12;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 2; col++) {
+      ctx.fillRect(
+        screenX - mainSize / 3 + col * mainSize * 0.4,
+        screenY - mainSize / 4 + row * mainSize * 0.35,
+        windowSize,
+        windowSize
+      );
+    }
+  }
+
+  // Door
+  ctx.fillStyle = "#4a5568";
+  ctx.fillRect(
+    screenX - mainSize / 6,
+    screenY + mainSize / 4,
+    mainSize / 3,
+    mainSize / 4
+  );
+
+  // Hub symbol (star)
+  ctx.fillStyle = "#ffd700";
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const angle = ((Math.PI * 2) / 5) * i - Math.PI / 2;
+    const x = screenX + Math.cos(angle) * mainSize * 0.15;
+    const y = screenY - mainSize / 2 - 15 + Math.sin(angle) * mainSize * 0.15;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function drawLumberyard(ctx, col, row, camera, size, zoom) {
   const pos = hexToPixel(col, row, size);
   const screenX = pos.x + camera.x;
   const screenY = pos.y + camera.y;
-
-  // Building dimensions
-  const buildingSize = size * 0.5;
-  const roofHeight = buildingSize * 0.3;
+  const buildingSize = size * 0.6;
 
   ctx.save();
 
-  // Draw building body (rectangle)
-  ctx.fillStyle = "#8b4513";
+  // Traditional timber mill
+  const roofHeight = buildingSize * 0.4;
+
+  // Stone foundation
+  ctx.fillStyle = "#888888";
   ctx.fillRect(
     screenX - buildingSize / 2,
-    screenY - buildingSize / 2,
+    screenY + buildingSize / 4,
     buildingSize,
-    buildingSize
-  );
-  ctx.strokeStyle = "#654321";
-  ctx.lineWidth = 2 * zoom;
-  ctx.strokeRect(
-    screenX - buildingSize / 2,
-    screenY - buildingSize / 2,
-    buildingSize,
-    buildingSize
+    buildingSize * 0.15
   );
 
-  // Draw roof (triangle)
-  ctx.fillStyle = "#a0522d";
+  // Wooden walls
+  ctx.fillStyle = "#a0826d";
+  ctx.fillRect(
+    screenX - buildingSize / 2,
+    screenY - buildingSize / 4,
+    buildingSize,
+    buildingSize / 2
+  );
+
+  // Vertical planks
+  ctx.strokeStyle = "#8b6f47";
+  ctx.lineWidth = 2 * zoom;
+  for (let i = 0; i <= 6; i++) {
+    const x = screenX - buildingSize / 2 + (buildingSize / 6) * i;
+    ctx.beginPath();
+    ctx.moveTo(x, screenY - buildingSize / 4);
+    ctx.lineTo(x, screenY + buildingSize / 4);
+    ctx.stroke();
+  }
+
+  // Pitched roof
+  ctx.fillStyle = "#704214";
   ctx.beginPath();
-  ctx.moveTo(screenX - buildingSize / 2 - 5, screenY - buildingSize / 2);
-  ctx.lineTo(screenX, screenY - buildingSize / 2 - roofHeight);
-  ctx.lineTo(screenX + buildingSize / 2 + 5, screenY - buildingSize / 2);
+  ctx.moveTo(screenX - buildingSize / 2 - 5, screenY - buildingSize / 4);
+  ctx.lineTo(screenX, screenY - buildingSize / 4 - roofHeight);
+  ctx.lineTo(screenX + buildingSize / 2 + 5, screenY - buildingSize / 4);
   ctx.closePath();
   ctx.fill();
-  ctx.stroke();
 
-  // Draw door
-  const doorWidth = buildingSize * 0.25;
-  const doorHeight = buildingSize * 0.4;
-  ctx.fillStyle = "#4a2511";
+  // Chimney
+  ctx.fillStyle = "#a0522d";
   ctx.fillRect(
-    screenX - doorWidth / 2,
-    screenY + buildingSize / 2 - doorHeight,
-    doorWidth,
-    doorHeight
+    screenX + buildingSize / 4,
+    screenY - buildingSize / 4 - roofHeight + 5,
+    buildingSize * 0.12,
+    roofHeight * 0.6
   );
 
-  // Draw windows
-  const windowSize = buildingSize * 0.15;
+  // Windows
   ctx.fillStyle = "#87ceeb";
-  // Left window
   ctx.fillRect(
     screenX - buildingSize / 3,
-    screenY - buildingSize / 4,
-    windowSize,
-    windowSize
+    screenY - buildingSize / 8,
+    buildingSize * 0.15,
+    buildingSize * 0.15
   );
-  // Right window
   ctx.fillRect(
-    screenX + buildingSize / 3 - windowSize,
-    screenY - buildingSize / 4,
-    windowSize,
-    windowSize
+    screenX + buildingSize / 6,
+    screenY - buildingSize / 8,
+    buildingSize * 0.15,
+    buildingSize * 0.15
   );
 
   ctx.restore();
@@ -342,7 +441,7 @@ function drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom) {
 // Draw a train on a track
 function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
   const pos1 = hexToPixel(hex1.col, hex1.row, size);
-  
+
   // Find which edge of hex1 connects to hex2
   let edgeIndex = -1;
   for (let i = 0; i < 6; i++) {
@@ -390,9 +489,19 @@ function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
   const windowWidth = trainLength * 0.25;
   const windowHeight = trainWidth * 0.5;
   const windowSpacing = trainLength * 0.15;
-  
-  ctx.fillRect(-windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
-  ctx.fillRect(windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
+
+  ctx.fillRect(
+    -windowSpacing - windowWidth / 2,
+    -windowHeight / 2,
+    windowWidth,
+    windowHeight
+  );
+  ctx.fillRect(
+    windowSpacing - windowWidth / 2,
+    -windowHeight / 2,
+    windowWidth,
+    windowHeight
+  );
 
   ctx.restore();
 }
@@ -443,21 +552,21 @@ function getVisibleHexRange(canvas, camera, size) {
  */
 export function draw(ctx, params) {
   const {
-          canvas,
-          map,
-          placed_tracks,
-          placed_buildings,
-          trains,
-          camera,
-          hoveredElement,
-          size,
-          zoom,
-          TERRAIN,
-          OBJECT_TYPES,
-          tileCountEl,
-          zoomLevelEl,
-          trackCountEl,
-          trainCountEl,
+    canvas,
+    map,
+    placed_tracks,
+    placed_buildings,
+    trains,
+    camera,
+    hoveredElement,
+    size,
+    zoom,
+    TERRAIN,
+    OBJECT_TYPES,
+    tileCountEl,
+    zoomLevelEl,
+    trackCountEl,
+    trainCountEl,
   } = params;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -523,7 +632,7 @@ export function draw(ctx, params) {
       }
     }
   }
-    for (const tileKey in placed_buildings) {
+  for (const tileKey in placed_buildings) {
     const building = placed_buildings[tileKey];
 
     // Check if building is in visible range
@@ -534,13 +643,21 @@ export function draw(ctx, params) {
       building.row <= range.maxRow;
 
     if (inRange) {
-      drawBuilding(ctx, building.col, building.row, camera, size, zoom, building);
+      drawBuilding(
+        ctx,
+        building.col,
+        building.row,
+        camera,
+        size,
+        zoom,
+        building
+      );
     }
   }
 
   // Draw trains
   if (trains) {
-    trains.forEach(train => {
+    trains.forEach((train) => {
       // Check if train is in visible range
       const hex1 = train.hex1;
       const hex2 = train.hex2;
@@ -556,7 +673,15 @@ export function draw(ctx, params) {
           hex2.row <= range.maxRow);
 
       if (inRange) {
-        drawTrain(ctx, train.hex1, train.hex2, train.progress, camera, size, zoom);
+        drawTrain(
+          ctx,
+          train.hex1,
+          train.hex2,
+          train.progress,
+          camera,
+          size,
+          zoom
+        );
       }
     });
   }
