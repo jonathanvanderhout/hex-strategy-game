@@ -140,8 +140,9 @@
         canPlaceBuilding,
       } from "./buildingTypes.js";
       import { SaveGameManager, createSaveLoadButton } from "./savegame.js";
+      import { UIManager } from "./ui.js";
 
-      let selectedBuildingType = 'lumberyard';
+      // let selectedBuildingType = 'lumberyard';
 
       const canvas = document.getElementById("hexCanvas");
       const ctx = canvas.getContext("2d");
@@ -164,7 +165,7 @@
 
       // Interaction state
       let hoveredElement = null;
-      let currentMode = "place";
+      // let currentMode = "place";
 
       // Terrain types
       const TERRAIN = {
@@ -205,6 +206,14 @@
         camera: { x: 0, y: 0 },
         terrainConfig: getConfig(),
       };
+      const uiManager = new UIManager(gameState, {
+        onModeChange: (mode) => {
+          console.log("Mode changed to:", mode);
+        },
+        onBuildingSelect: (buildingType) => {
+          console.log("Building selected:", buildingType);
+        },
+      });
       const map = {}; // not saved because it can just be regenerated.
 
       // Update size based on zoom
@@ -569,7 +578,7 @@
 
         if (element.type === "tile") {
           // Building placement
-          if (currentMode === "building") {
+          if (uiManager.getMode() === "building") {
             const tileKey = `${element.col},${element.row}`;
 
             // Check if tile already has a building
@@ -583,10 +592,10 @@
             const terrainType = hex.terrain.name.toUpperCase();
 
             // Check if this building can be placed on this terrain
-            if (!canPlaceBuilding(selectedBuildingType, terrainType)) {
+            if (!canPlaceBuilding(uiManager.getSelectedBuilding(), terrainType)) {
               console.log(
                 "⚠️ Cannot place",
-                selectedBuildingType,
+                uiManager.getSelectedBuilding(),
                 "on",
                 terrainType
               );
@@ -594,7 +603,7 @@
             }
 
             // Get the building definition
-            const buildingDef = getBuildingType(selectedBuildingType);
+            const buildingDef = getBuildingType(uiManager.getSelectedBuilding());
 
             // Check if building is unlocked
             if (!buildingDef.unlocked) {
@@ -604,7 +613,7 @@
 
             // Place the building
             gameState.placed_buildings[tileKey] = {
-              type: selectedBuildingType, // 'farm', 'lumberyard', etc.
+              type: uiManager.getSelectedBuilding(), // 'farm', 'lumberyard', etc.
               col: element.col,
               row: element.row,
               placedAt: Date.now(),
@@ -658,7 +667,7 @@
         if (element.type === "edge") {
           const edgeKey = element.edgeKey;
 
-          if (currentMode === "place") {
+          if (uiManager.getMode() === "place") {
             if (!gameState.placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
@@ -678,13 +687,13 @@
               });
               rebuildTrackGraph();
             }
-          } else if (currentMode === "remove") {
+          } else if (uiManager.getMode() === "remove") {
             if (gameState.placed_tracks[edgeKey]) {
               delete gameState.placed_tracks[edgeKey];
               console.log("🗑️ TRACK REMOVED", { edgeKey });
               rebuildTrackGraph();
             }
-          } else if (currentMode === "train") {
+          } else if (uiManager.getMode() === "train") {
             if (gameState.placed_tracks[edgeKey]) {
               const neighbor = getNeighbor(
                 element.col,
@@ -831,15 +840,6 @@
       });
 
       // Mode button handlers
-      document.querySelectorAll(".mode-button").forEach((button) => {
-        button.addEventListener("click", () => {
-          document
-            .querySelectorAll(".mode-button")
-            .forEach((b) => b.classList.remove("active"));
-          button.classList.add("active");
-          currentMode = button.dataset.mode;
-        });
-      });
 
       // Mouse event handlers
       canvas.addEventListener("mousedown", (e) => {

@@ -5,7 +5,7 @@ export class UIManager {
   constructor(gameState, callbacks) {
     this.gameState = gameState;
     this.callbacks = callbacks;
-    this.currentMode = 'place';
+    this.mode = 'place';
     this.selectedBuildingType = 'farm';
     
     this.createBuildingPaletteHTML();
@@ -81,23 +81,34 @@ export class UIManager {
   setupModeButtons() {
     document.querySelectorAll('.mode-button').forEach(button => {
       button.addEventListener('click', () => {
-        document.querySelectorAll('.mode-button').forEach(b => b.classList.remove('active'));
-        button.classList.add('active');
-        this.currentMode = button.dataset.mode;
-        
-        const palette = document.getElementById('building-palette');
-        if (this.currentMode === 'building') {
-          palette.classList.add('visible');
-          this.updateBuildingPalette();
-        } else {
-          palette.classList.remove('visible');
-        }
-        
-        if (this.callbacks.onModeChange) {
-          this.callbacks.onModeChange(this.currentMode);
-        }
+        this.setMode(button.dataset.mode);
       });
     });
+  }
+  
+  setMode(mode) {
+    this.mode = mode;
+    
+    // Update button states
+    document.querySelectorAll('.mode-button').forEach(b => b.classList.remove('active'));
+    const activeButton = document.querySelector(`[data-mode="${mode}"]`);
+    if (activeButton) {
+      activeButton.classList.add('active');
+    }
+    
+    // Show/hide building palette
+    const palette = document.getElementById('building-palette');
+    if (this.mode === 'building') {
+      palette.classList.add('visible');
+      this.updateBuildingPalette();
+    } else {
+      palette.classList.remove('visible');
+    }
+    
+    // Notify callback
+    if (this.callbacks.onModeChange) {
+      this.callbacks.onModeChange(this.mode);
+    }
   }
   
   setupBuildingPalette() {
@@ -127,12 +138,7 @@ export class UIManager {
       
       button.addEventListener('click', () => {
         if (buildingType.unlocked) {
-          this.selectedBuildingType = buildingType.id;
-          this.updateBuildingPalette();
-          
-          if (this.callbacks.onBuildingSelect) {
-            this.callbacks.onBuildingSelect(this.selectedBuildingType);
-          }
+          this.selectBuilding(buildingType.id);
         }
       });
       
@@ -140,8 +146,17 @@ export class UIManager {
     });
   }
   
-  getCurrentMode() {
-    return this.currentMode;
+  selectBuilding(buildingTypeId) {
+    this.selectedBuildingType = buildingTypeId;
+    this.updateBuildingPalette();
+    
+    if (this.callbacks.onBuildingSelect) {
+      this.callbacks.onBuildingSelect(this.selectedBuildingType);
+    }
+  }
+  
+  getMode() {
+    return this.mode;
   }
   
   getSelectedBuilding() {
@@ -149,7 +164,7 @@ export class UIManager {
   }
   
   refreshBuildingPalette() {
-    if (this.currentMode === 'building') {
+    if (this.mode === 'building') {
       this.updateBuildingPalette();
     }
   }
