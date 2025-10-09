@@ -592,7 +592,9 @@
             const terrainType = hex.terrain.name.toUpperCase();
 
             // Check if this building can be placed on this terrain
-            if (!canPlaceBuilding(uiManager.getSelectedBuilding(), terrainType)) {
+            if (
+              !canPlaceBuilding(uiManager.getSelectedBuilding(), terrainType)
+            ) {
               console.log(
                 "⚠️ Cannot place",
                 uiManager.getSelectedBuilding(),
@@ -603,7 +605,9 @@
             }
 
             // Get the building definition
-            const buildingDef = getBuildingType(uiManager.getSelectedBuilding());
+            const buildingDef = getBuildingType(
+              uiManager.getSelectedBuilding()
+            );
 
             // Check if building is unlocked
             if (!buildingDef.unlocked) {
@@ -617,7 +621,10 @@
               col: element.col,
               row: element.row,
               placedAt: Date.now(),
-              inventory: {}, // local resource storage
+              inventory: {
+                inputs: {}, // Resources delivered by trains
+                outputs: {}, // Resources produced, ready for train pickup
+              },
               productionProgress: 0, // 0 to 1
             };
 
