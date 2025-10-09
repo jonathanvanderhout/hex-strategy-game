@@ -113,10 +113,11 @@ function multiOctaveNoise(x, y, octaves = 4) {
 // Sample noise to build distribution
 function sampleNoiseDistribution(samples = 10000) {
   const noiseValues = [];
+  const rng = seededRandom(WORLD_SEED); // Add offset to avoid interfering with permutation
   
   for (let i = 0; i < samples; i++) {
-    const x = Math.random() * 100;
-    const y = Math.random() * 100;
+    const x = rng() * 100;
+    const y = rng() * 100;
     const noise = multiOctaveNoise(x * config.scale, y * config.scale, config.octaves);
     noiseValues.push(noise);
   }
