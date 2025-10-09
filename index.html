@@ -141,7 +141,10 @@
       } from "./buildingTypes.js";
       import { SaveGameManager, createSaveLoadButton } from "./savegame.js";
       import { UIManager } from "./ui.js";
-      import { startBuildingProductionLoop, removeResourceFromBuilding } from "./buildingProduction.js";
+      import {
+        startBuildingProductionLoop,
+        removeResourceFromBuilding,
+      } from "./buildingProduction.js";
 
       // let selectedBuildingType = 'lumberyard';
 
@@ -714,8 +717,8 @@
                 hex1: { col: element.col, row: element.row },
                 hex2: { col: neighbor.col, row: neighbor.row },
                 progress: 0.5,
-                cargo:{},
-                cargoCapacity:10,
+                cargo: {},
+                cargoCapacity: 1000,
                 direction: 1,
                 speed: 0.02,
               });
@@ -748,35 +751,106 @@
               train.progress <= 0.5);
 
           if (crossedMidpoint) {
-            // console.log("🚂 Train passed midpoint!", {
-            //   trainId: train.id,
-            //   edgeKey: train.edgeKey,
-            //   hex1: `(${train.hex1.col}, ${train.hex1.row})`,
-            //   hex2: `(${train.hex2.col}, ${train.hex2.row})`,
-            //   direction: train.direction === 1 ? "hex1 → hex2" : "hex2 → hex1",
-            // });
             const hex1Key = `${train.hex1.col},${train.hex1.row}`;
             const hex2Key = `${train.hex2.col},${train.hex2.row}`;
 
             const buildingOnHex1 = gameState.placed_buildings[hex1Key];
             const buildingOnHex2 = gameState.placed_buildings[hex2Key];
 
+            // Helper function to calculate current cargo amount
+            const getCurrentCargoAmount = (train) => {
+              let total = 0;
+              for (let resource in train.cargo) {
+                total += train.cargo[resource];
+              }
+              return total;
+            };
 
-            //TODO: Need to create delivery and pickup here. 
+            // Helper function to handle pickup from a building
+            const handlePickup = (building) => {
+                console.log("🔍 Attempting pickup from building:", {
+    type: building.type,
+    hasInventory: !!building.inventory,
+    inventory: building.inventory
+  });
+              if (!building.inventory || !building.inventory.outputs) return;
+
+              // Pick up all available outputs if there's space
+              for (let resourceType in building.inventory.outputs) {
+                const available = building.inventory.outputs[resourceType];
+                const currentCargo = getCurrentCargoAmount(train);
+                const spaceLeft = train.cargoCapacity - currentCargo;
+
+                if (spaceLeft > 0 && available > 0) {
+                  const amountToPickup = Math.min(available, spaceLeft);
+                  const pickedUp = removeResourceFromBuilding(
+                    building,
+                    resourceType,
+                    amountToPickup
+                  );
+
+                  if (!train.cargo[resourceType]) {
+                    train.cargo[resourceType] = 0;
+                  }
+                  train.cargo[resourceType] += pickedUp;
+
+                  console.log(
+                    `🚂 Train ${train.id} picked up ${pickedUp}x ${resourceType}`,
+                    {
+                      trainCargo: train.cargo,
+                      cargoSpace: `${getCurrentCargoAmount(train)}/${
+                        train.cargoCapacity
+                      }`,
+                    }
+                  );
+                }
+              }
+            };
+
+            // Helper function to handle delivery to hub
+            const handleDelivery = (building) => {
+              const buildingType = getBuildingType(building.type);
+
+              // Only deliver to hubs
+              if (buildingType && buildingType.isHub) {
+                // Deliver all cargo to hub
+                for (let resourceType in train.cargo) {
+                  const amount = train.cargo[resourceType];
+
+                  if (amount > 0) {
+                    if (!building.inventory) {
+                      building.inventory = { inputs: {}, outputs: {} };
+                    }
+                    if (!building.inventory.inputs[resourceType]) {
+                      building.inventory.inputs[resourceType] = 0;
+                    }
+
+                    building.inventory.inputs[resourceType] += amount;
+
+                    console.log(
+                      `📦 Train ${train.id} delivered ${amount}x ${resourceType} to hub`,
+                      {
+                        location: `(${building.col}, ${building.row})`,
+                        hubInventory: building.inventory.inputs,
+                      }
+                    );
+
+                    // Remove from train
+                    delete train.cargo[resourceType];
+                  }
+                }
+              }
+            };
+
+            // Process both hexes
             if (buildingOnHex1) {
-              console.log("  🏢 Building on hex1:", {
-                type: buildingOnHex1.type,
-                location: hex1Key,
-                inventory: buildingOnHex1.inventory,
-              });
+              handlePickup(buildingOnHex1);
+              handleDelivery(buildingOnHex1);
             }
 
             if (buildingOnHex2) {
-              console.log("  🏢 Building on hex2:", {
-                type: buildingOnHex2.type,
-                location: hex2Key,
-                inventory: buildingOnHex2.inventory,
-              });
+              handlePickup(buildingOnHex2);
+              handleDelivery(buildingOnHex2);
             }
           }
 
