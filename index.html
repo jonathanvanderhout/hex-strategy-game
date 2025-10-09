@@ -141,6 +141,8 @@
       } from "./buildingTypes.js";
       import { SaveGameManager, createSaveLoadButton } from "./savegame.js";
       import { UIManager } from "./ui.js";
+      import { startBuildingProductionLoop } from './buildingProduction.js';
+
 
       // let selectedBuildingType = 'lumberyard';
 
@@ -990,6 +992,8 @@
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       animateTrains();
+      startBuildingProductionLoop(gameState)
+
     </script>
   </body>
 </html>

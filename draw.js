@@ -27,12 +27,12 @@ function lightenColor(color, percent) {
 function createHexPath(size) {
   const path = new Path2D();
   const angles = [0, 60, 120, 180, 240, 300];
-  
+
   for (let i = 0; i < 6; i++) {
     const angleRad = (Math.PI / 180) * angles[i];
     const x = size * Math.cos(angleRad);
     const y = size * Math.sin(angleRad);
-    
+
     if (i === 0) {
       path.moveTo(x, y);
     } else {
@@ -49,7 +49,7 @@ function drawHexBatch(ctx, hexes, terrain, size, zoom, showLabels) {
 
   // Create hex path once
   const hexPath = createHexPath(size);
-  
+
   // Draw all fills
   ctx.fillStyle = terrain.color;
   hexes.forEach(({ screenX, screenY }) => {
@@ -58,7 +58,7 @@ function drawHexBatch(ctx, hexes, terrain, size, zoom, showLabels) {
     ctx.fill(hexPath);
     ctx.restore();
   });
-  
+
   // Draw all strokes
   ctx.strokeStyle = "#333";
   ctx.lineWidth = 1 * zoom;
@@ -68,14 +68,14 @@ function drawHexBatch(ctx, hexes, terrain, size, zoom, showLabels) {
     ctx.stroke(hexPath);
     ctx.restore();
   });
-  
+
   // Draw labels only if zoomed in enough
   if (showLabels) {
     ctx.fillStyle = "#000";
     ctx.font = `${12 * zoom}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    
+
     hexes.forEach(({ screenX, screenY, col, row }) => {
       ctx.fillText(`${col},${row}`, screenX, screenY);
     });
@@ -83,21 +83,31 @@ function drawHexBatch(ctx, hexes, terrain, size, zoom, showLabels) {
 }
 
 // Draw hovered hex separately
-function drawHoveredHex(ctx, centerX, centerY, terrain, col, row, size, zoom, showLabels) {
+function drawHoveredHex(
+  ctx,
+  centerX,
+  centerY,
+  terrain,
+  col,
+  row,
+  size,
+  zoom,
+  showLabels
+) {
   const hexPath = createHexPath(size);
-  
+
   ctx.save();
   ctx.translate(centerX, centerY);
-  
+
   ctx.fillStyle = lightenColor(terrain.color, 30);
   ctx.fill(hexPath);
-  
+
   ctx.strokeStyle = "#ffcc00";
   ctx.lineWidth = 2 * zoom;
   ctx.stroke(hexPath);
-  
+
   ctx.restore();
-  
+
   // Draw label
   if (showLabels) {
     ctx.fillStyle = "#000";
@@ -139,6 +149,9 @@ function drawEdgeHighlight(ctx, centerX, centerY, edgeIndex, size, zoom) {
 }
 
 function drawBuilding(ctx, col, row, camera, size, zoom, building) {
+  const pos = hexToPixel(col, row, size);
+  const screenX = pos.x + camera.x;
+  const screenY = pos.y + camera.y;
   switch (building.type) {
     case "lumberyard":
       drawLumberyard(ctx, col, row, camera, size, zoom);
@@ -146,6 +159,273 @@ function drawBuilding(ctx, col, row, camera, size, zoom, building) {
     case "hub":
       drawHub(ctx, col, row, camera, size, zoom);
       break;
+  }
+
+  drawInventoryStacks(ctx, screenX, screenY, building.inventory, size, zoom);
+}
+
+/**
+ * Draw inventory stacks around a building
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} centerX - Building center X position (screen space)
+ * @param {number} centerY - Building center Y position (screen space)
+ * @param {Object} inventory - Inventory object with inputs/outputs
+ * @param {number} size - Hex size
+ * @param {number} zoom - Current zoom level
+ */
+function drawInventoryStacks(ctx, centerX, centerY, inventory, size, zoom) {
+  // Resource visual configurations
+  const resourceStyles = {
+    wood: {
+      color: "#8B4513",
+      highlightColor: "#A0522D",
+      shape: "logs", // stacked logs
+      stackHeight: 3,
+    },
+    iron_ore: {
+      color: "#696969",
+      highlightColor: "#808080",
+      shape: "pile", // pile of rocks
+      stackHeight: 2,
+    },
+    coal: {
+      color: "#1a1a1a",
+      highlightColor: "#333333",
+      shape: "pile",
+      stackHeight: 2,
+    },
+    iron_ingot: {
+      color: "#B0C4DE",
+      highlightColor: "#D3D3D3",
+      shape: "bars", // metal bars
+      stackHeight: 4,
+    },
+    steel: {
+      color: "#4682B4",
+      highlightColor: "#5F9EA0",
+      shape: "bars",
+      stackHeight: 4,
+    },
+  };
+
+  // Collect all resources from inputs and outputs
+  const allResources = [];
+
+  if (inventory.inputs) {
+    for (const [type, amount] of Object.entries(inventory.inputs)) {
+      if (amount > 0) {
+        allResources.push({ type, amount, category: "input" });
+      }
+    }
+  }
+
+  if (inventory.outputs) {
+    for (const [type, amount] of Object.entries(inventory.outputs)) {
+      if (amount > 0) {
+        allResources.push({ type, amount, category: "output" });
+      }
+    }
+  }
+
+  if (allResources.length === 0) return;
+
+  // Calculate positions around the building
+  const stackDistance = size * 0.7; // Distance from building center
+  const baseStackSize = size * 0.12; // Base size of each stack
+
+  // Distribute resources around the building
+  allResources.forEach((resource, index) => {
+    const angle = (index / allResources.length) * Math.PI * 2 - Math.PI / 2;
+    const stackX = centerX + Math.cos(angle) * stackDistance;
+    const stackY = centerY + Math.sin(angle) * stackDistance;
+
+    const style = resourceStyles[resource.type] || {
+      color: "#888888",
+      highlightColor: "#aaaaaa",
+      shape: "pile",
+      stackHeight: 2,
+    };
+
+    // Calculate number of visible stacks (max 5 visual stacks)
+    const visualStacks = Math.min(
+      5,
+      Math.ceil(resource.amount / style.stackHeight)
+    );
+
+    ctx.save();
+
+    // Draw based on shape type
+    switch (style.shape) {
+      case "logs":
+        drawLogStack(
+          ctx,
+          stackX,
+          stackY,
+          visualStacks,
+          baseStackSize,
+          style,
+          zoom
+        );
+        break;
+      case "bars":
+        drawBarStack(
+          ctx,
+          stackX,
+          stackY,
+          visualStacks,
+          baseStackSize,
+          style,
+          zoom
+        );
+        break;
+      case "pile":
+      default:
+        drawPileStack(
+          ctx,
+          stackX,
+          stackY,
+          visualStacks,
+          baseStackSize,
+          style,
+          zoom
+        );
+        break;
+    }
+
+    // Draw amount label if zoomed in
+    if (zoom > 0.6) {
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2;
+      ctx.font = `bold ${10 * zoom}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const labelY = stackY - baseStackSize * 1.5;
+      ctx.strokeText(resource.amount, stackX, labelY);
+      ctx.fillText(resource.amount, stackX, labelY);
+    }
+
+    ctx.restore();
+  });
+}
+
+/**
+ * Draw stacked logs
+ */
+function drawLogStack(ctx, x, y, count, baseSize, style, zoom) {
+  const logWidth = baseSize * 1.5;
+  const logHeight = baseSize * 0.4;
+
+  for (let i = 0; i < count; i++) {
+    const offsetY = y + baseSize - i * logHeight * 0.7;
+
+    // Main log body
+    ctx.fillStyle = style.color;
+    ctx.fillRect(
+      x - logWidth / 2,
+      offsetY - logHeight / 2,
+      logWidth,
+      logHeight
+    );
+
+    // Wood grain lines
+    ctx.strokeStyle = style.highlightColor;
+    ctx.lineWidth = 1 * zoom;
+    for (let j = 0; j < 3; j++) {
+      const lineX = x - logWidth / 2 + (logWidth / 4) * (j + 0.5);
+      ctx.beginPath();
+      ctx.moveTo(lineX, offsetY - logHeight / 2);
+      ctx.lineTo(lineX, offsetY + logHeight / 2);
+      ctx.stroke();
+    }
+
+    // End caps (circular)
+    ctx.fillStyle = style.highlightColor;
+    ctx.beginPath();
+    ctx.arc(x - logWidth / 2, offsetY, logHeight / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + logWidth / 2, offsetY, logHeight / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Draw metal bars
+ */
+function drawBarStack(ctx, x, y, count, baseSize, style, zoom) {
+  const barWidth = baseSize * 0.3;
+  const barLength = baseSize * 1.8;
+
+  for (let i = 0; i < count; i++) {
+    const offsetX = x + (i - count / 2) * barWidth * 0.8;
+
+    // Main bar
+    ctx.fillStyle = style.color;
+    ctx.fillRect(
+      offsetX - barWidth / 2,
+      y - barLength / 2,
+      barWidth,
+      barLength
+    );
+
+    // Highlight edge
+    ctx.fillStyle = style.highlightColor;
+    ctx.fillRect(
+      offsetX - barWidth / 2,
+      y - barLength / 2,
+      barWidth * 0.3,
+      barLength
+    );
+
+    // Border
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 0.5 * zoom;
+    ctx.strokeRect(
+      offsetX - barWidth / 2,
+      y - barLength / 2,
+      barWidth,
+      barLength
+    );
+  }
+}
+
+/**
+ * Draw pile of resources (ore, coal, etc)
+ */
+function drawPileStack(ctx, x, y, count, baseSize, style, zoom) {
+  const pileWidth = baseSize * 1.2;
+  const pileHeight = baseSize * 0.8;
+
+  for (let i = 0; i < count; i++) {
+    const offsetY = y + baseSize * 0.5 - i * pileHeight * 0.5;
+    const width = pileWidth * (1 - i * 0.1); // Taper as stacks go up
+
+    // Draw pile as irregular mound
+    ctx.fillStyle = style.color;
+    ctx.beginPath();
+    ctx.ellipse(x, offsetY, width / 2, pileHeight / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Add some texture with smaller chunks
+    ctx.fillStyle = style.highlightColor;
+    for (let j = 0; j < 4; j++) {
+      const chunkX = x + (Math.random() - 0.5) * width * 0.6;
+      const chunkY = offsetY + (Math.random() - 0.5) * pileHeight * 0.4;
+      const chunkSize = baseSize * 0.15;
+
+      ctx.beginPath();
+      ctx.arc(chunkX, chunkY, chunkSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Outline
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 0.5 * zoom;
+    ctx.beginPath();
+    ctx.ellipse(x, offsetY, width / 2, pileHeight / 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
@@ -160,14 +440,29 @@ function drawHub(ctx, col, row, camera, size, zoom) {
   const mainSize = buildingSize * 0.5;
 
   ctx.fillStyle = "#8b9dc3";
-  ctx.fillRect(screenX - mainSize / 2, screenY - mainSize / 2, mainSize, mainSize);
+  ctx.fillRect(
+    screenX - mainSize / 2,
+    screenY - mainSize / 2,
+    mainSize,
+    mainSize
+  );
 
   ctx.fillStyle = "#6a7ba3";
   ctx.fillRect(screenX - mainSize / 2, screenY - mainSize / 2 - 8, mainSize, 8);
 
   ctx.fillStyle = "#9fafc9";
-  ctx.fillRect(screenX - mainSize / 2 - mainSize * 0.3, screenY - mainSize / 4, mainSize * 0.3, mainSize / 2);
-  ctx.fillRect(screenX + mainSize / 2, screenY - mainSize / 4, mainSize * 0.3, mainSize / 2);
+  ctx.fillRect(
+    screenX - mainSize / 2 - mainSize * 0.3,
+    screenY - mainSize / 4,
+    mainSize * 0.3,
+    mainSize / 2
+  );
+  ctx.fillRect(
+    screenX + mainSize / 2,
+    screenY - mainSize / 4,
+    mainSize * 0.3,
+    mainSize / 2
+  );
 
   ctx.fillStyle = "#ffeb99";
   const windowSize = mainSize * 0.12;
@@ -183,7 +478,12 @@ function drawHub(ctx, col, row, camera, size, zoom) {
   }
 
   ctx.fillStyle = "#4a5568";
-  ctx.fillRect(screenX - mainSize / 6, screenY + mainSize / 4, mainSize / 3, mainSize / 4);
+  ctx.fillRect(
+    screenX - mainSize / 6,
+    screenY + mainSize / 4,
+    mainSize / 3,
+    mainSize / 4
+  );
 
   ctx.fillStyle = "#ffd700";
   ctx.beginPath();
@@ -211,10 +511,20 @@ function drawLumberyard(ctx, col, row, camera, size, zoom) {
   const roofHeight = buildingSize * 0.4;
 
   ctx.fillStyle = "#888888";
-  ctx.fillRect(screenX - buildingSize / 2, screenY + buildingSize / 4, buildingSize, buildingSize * 0.15);
+  ctx.fillRect(
+    screenX - buildingSize / 2,
+    screenY + buildingSize / 4,
+    buildingSize,
+    buildingSize * 0.15
+  );
 
   ctx.fillStyle = "#a0826d";
-  ctx.fillRect(screenX - buildingSize / 2, screenY - buildingSize / 4, buildingSize, buildingSize / 2);
+  ctx.fillRect(
+    screenX - buildingSize / 2,
+    screenY - buildingSize / 4,
+    buildingSize,
+    buildingSize / 2
+  );
 
   ctx.strokeStyle = "#8b6f47";
   ctx.lineWidth = 2 * zoom;
@@ -243,8 +553,18 @@ function drawLumberyard(ctx, col, row, camera, size, zoom) {
   );
 
   ctx.fillStyle = "#87ceeb";
-  ctx.fillRect(screenX - buildingSize / 3, screenY - buildingSize / 8, buildingSize * 0.15, buildingSize * 0.15);
-  ctx.fillRect(screenX + buildingSize / 6, screenY - buildingSize / 8, buildingSize * 0.15, buildingSize * 0.15);
+  ctx.fillRect(
+    screenX - buildingSize / 3,
+    screenY - buildingSize / 8,
+    buildingSize * 0.15,
+    buildingSize * 0.15
+  );
+  ctx.fillRect(
+    screenX + buildingSize / 6,
+    screenY - buildingSize / 8,
+    buildingSize * 0.15,
+    buildingSize * 0.15
+  );
 
   ctx.restore();
 }
@@ -362,8 +682,18 @@ function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
   const windowHeight = trainWidth * 0.5;
   const windowSpacing = trainLength * 0.15;
 
-  ctx.fillRect(-windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
-  ctx.fillRect(windowSpacing - windowWidth / 2, -windowHeight / 2, windowWidth, windowHeight);
+  ctx.fillRect(
+    -windowSpacing - windowWidth / 2,
+    -windowHeight / 2,
+    windowWidth,
+    windowHeight
+  );
+  ctx.fillRect(
+    windowSpacing - windowWidth / 2,
+    -windowHeight / 2,
+    windowWidth,
+    windowHeight
+  );
 
   ctx.restore();
 }
@@ -373,7 +703,11 @@ function getVisibleHexRange(canvas, camera, size) {
   const height = Math.sqrt(3) * size;
   const margin = 2; // Reduced margin
 
-  const topLeft = pixelToHex(-camera.x - width * margin, -camera.y - height * margin, size);
+  const topLeft = pixelToHex(
+    -camera.x - width * margin,
+    -camera.y - height * margin,
+    size
+  );
   const bottomRight = pixelToHex(
     -camera.x + canvas.width + width * margin,
     -camera.y + canvas.height + height * margin,
@@ -413,7 +747,7 @@ export function draw(ctx, params) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const range = getVisibleHexRange(canvas, camera, size);
-  
+
   // Only show labels when zoomed in (zoom > 0.5)
   const showLabels = zoom > 0.5;
 
@@ -445,7 +779,7 @@ export function draw(ctx, params) {
         if (!hexesByTerrain[terrainKey]) {
           hexesByTerrain[terrainKey] = {
             terrain: hex.terrain,
-            hexes: []
+            hexes: [],
           };
         }
         hexesByTerrain[terrainKey].hexes.push({ screenX, screenY, col, row });
@@ -486,8 +820,14 @@ export function draw(ctx, params) {
       const hex2 = obj.hex2;
 
       const inRange =
-        (hex1.col >= range.minCol && hex1.col <= range.maxCol && hex1.row >= range.minRow && hex1.row <= range.maxRow) ||
-        (hex2.col >= range.minCol && hex2.col <= range.maxCol && hex2.row >= range.minRow && hex2.row <= range.maxRow);
+        (hex1.col >= range.minCol &&
+          hex1.col <= range.maxCol &&
+          hex1.row >= range.minRow &&
+          hex1.row <= range.maxRow) ||
+        (hex2.col >= range.minCol &&
+          hex2.col <= range.maxCol &&
+          hex2.row >= range.minRow &&
+          hex2.row <= range.maxRow);
 
       if (inRange) {
         drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom);
@@ -506,7 +846,15 @@ export function draw(ctx, params) {
       building.row <= range.maxRow;
 
     if (inRange) {
-      drawBuilding(ctx, building.col, building.row, camera, size, zoom, building);
+      drawBuilding(
+        ctx,
+        building.col,
+        building.row,
+        camera,
+        size,
+        zoom,
+        building
+      );
     }
   }
 
@@ -517,11 +865,25 @@ export function draw(ctx, params) {
       const hex2 = train.hex2;
 
       const inRange =
-        (hex1.col >= range.minCol && hex1.col <= range.maxCol && hex1.row >= range.minRow && hex1.row <= range.maxRow) ||
-        (hex2.col >= range.minCol && hex2.col <= range.maxCol && hex2.row >= range.minRow && hex2.row <= range.maxRow);
+        (hex1.col >= range.minCol &&
+          hex1.col <= range.maxCol &&
+          hex1.row >= range.minRow &&
+          hex1.row <= range.maxRow) ||
+        (hex2.col >= range.minCol &&
+          hex2.col <= range.maxCol &&
+          hex2.row >= range.minRow &&
+          hex2.row <= range.maxRow);
 
       if (inRange) {
-        drawTrain(ctx, train.hex1, train.hex2, train.progress, camera, size, zoom);
+        drawTrain(
+          ctx,
+          train.hex1,
+          train.hex2,
+          train.progress,
+          camera,
+          size,
+          zoom
+        );
       }
     });
   }
@@ -537,7 +899,14 @@ export function draw(ctx, params) {
       const v = vertices[hoveredElement.vertexIndex];
       drawVertexHighlight(ctx, v.x, v.y, zoom);
     } else if (hoveredElement.type === "edge") {
-      drawEdgeHighlight(ctx, screenX, screenY, hoveredElement.edgeIndex, size, zoom);
+      drawEdgeHighlight(
+        ctx,
+        screenX,
+        screenY,
+        hoveredElement.edgeIndex,
+        size,
+        zoom
+      );
     }
   }
 
