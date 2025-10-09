@@ -58,7 +58,7 @@ function checkProductionRequirements(building, buildingType) {
   
   // Check if all required resources are available in inventory
   for (let requirement of buildingType.consumes) {
-    const available = building.inventory[requirement.type] || 0;
+    const available = building.inventory.inputs[requirement.type] || 0;
     if (available < requirement.amount) {
       return false;
     }
@@ -150,6 +150,33 @@ export function addResourceToBuilding(building, resourceType, amount) {
   });
 }
 
+export function removeResourceFromBuilding(building, resourceType, amount) {
+  if (!building.inventory || !building.inventory.outputs) {
+    return 0;
+  }
+  
+  const available = building.inventory.outputs[resourceType] || 0;
+  const actualAmount = Math.min(amount, available);
+  
+  if (actualAmount > 0) {
+    building.inventory.outputs[resourceType] -= actualAmount;
+    
+    // Clean up if empty
+    if (building.inventory.outputs[resourceType] <= 0) {
+      delete building.inventory.outputs[resourceType];
+    }
+    
+    console.log(`📤 Removed ${actualAmount}x ${resourceType} from building`, {
+      col: building.col,
+      row: building.row,
+      remaining: building.inventory.outputs[resourceType] || 0
+    });
+  }
+  
+  return actualAmount;
+}
+
+
 /**
  * Get building's current inventory
  * @param {Object} building - The building instance
@@ -173,7 +200,7 @@ export function getBuildingNeeds(building, buildingType) {
   const needs = [];
   
   for (let requirement of buildingType.consumes) {
-    const available = building.inventory[requirement.type] || 0;
+    const available = building.inventory.inputs[requirement.type] || 0;
     const needed = requirement.amount - available;
     
     if (needed > 0) {

@@ -141,8 +141,7 @@
       } from "./buildingTypes.js";
       import { SaveGameManager, createSaveLoadButton } from "./savegame.js";
       import { UIManager } from "./ui.js";
-      import { startBuildingProductionLoop } from './buildingProduction.js';
-
+      import { startBuildingProductionLoop, removeResourceFromBuilding } from "./buildingProduction.js";
 
       // let selectedBuildingType = 'lumberyard';
 
@@ -715,6 +714,8 @@
                 hex1: { col: element.col, row: element.row },
                 hex2: { col: neighbor.col, row: neighbor.row },
                 progress: 0.5,
+                cargo:{},
+                cargoCapacity:10,
                 direction: 1,
                 speed: 0.02,
               });
@@ -732,7 +733,52 @@
       // Animate trains
       function animateTrains() {
         gameState.trains.forEach((train) => {
+          // Store previous progress to detect midpoint crossing
+          const prevProgress = train.progress;
+
           train.progress += train.speed * train.direction;
+
+          // Check if train crossed the midpoint (0.5)
+          const crossedMidpoint =
+            (train.direction === 1 &&
+              prevProgress < 0.5 &&
+              train.progress >= 0.5) ||
+            (train.direction === -1 &&
+              prevProgress > 0.5 &&
+              train.progress <= 0.5);
+
+          if (crossedMidpoint) {
+            // console.log("🚂 Train passed midpoint!", {
+            //   trainId: train.id,
+            //   edgeKey: train.edgeKey,
+            //   hex1: `(${train.hex1.col}, ${train.hex1.row})`,
+            //   hex2: `(${train.hex2.col}, ${train.hex2.row})`,
+            //   direction: train.direction === 1 ? "hex1 → hex2" : "hex2 → hex1",
+            // });
+            const hex1Key = `${train.hex1.col},${train.hex1.row}`;
+            const hex2Key = `${train.hex2.col},${train.hex2.row}`;
+
+            const buildingOnHex1 = gameState.placed_buildings[hex1Key];
+            const buildingOnHex2 = gameState.placed_buildings[hex2Key];
+
+
+            //TODO: Need to create delivery and pickup here. 
+            if (buildingOnHex1) {
+              console.log("  🏢 Building on hex1:", {
+                type: buildingOnHex1.type,
+                location: hex1Key,
+                inventory: buildingOnHex1.inventory,
+              });
+            }
+
+            if (buildingOnHex2) {
+              console.log("  🏢 Building on hex2:", {
+                type: buildingOnHex2.type,
+                location: hex2Key,
+                inventory: buildingOnHex2.inventory,
+              });
+            }
+          }
 
           // Check if train reached the end of the track
           if (train.progress >= 1 || train.progress <= 0) {
@@ -992,8 +1038,7 @@
       window.addEventListener("resize", resizeCanvas);
       resizeCanvas();
       animateTrains();
-      startBuildingProductionLoop(gameState)
-
+      startBuildingProductionLoop(gameState);
     </script>
   </body>
 </html>
