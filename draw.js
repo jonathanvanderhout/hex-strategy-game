@@ -159,6 +159,9 @@ function drawBuilding(ctx, col, row, camera, size, zoom, building) {
     case "hub":
       drawHub(ctx, col, row, camera, size, zoom);
       break;
+    case "farm":
+      drawFarm(ctx, col, row, camera, size, zoom);
+      break;
   }
 
   drawInventoryStacks(ctx, screenX, screenY, building.inventory, size, zoom);
@@ -428,6 +431,107 @@ function drawPileStack(ctx, x, y, count, baseSize, style, zoom) {
     ctx.stroke();
   }
 }
+function drawFarm(ctx, col, row, camera, size, zoom) {
+  const pos = hexToPixel(col, row, size);
+  const screenX = pos.x + camera.x;
+  const screenY = pos.y + camera.y;
+  const buildingSize = size * 0.7;
+
+  ctx.save();
+
+  // Barn
+  ctx.fillStyle = "#8b0000";
+  ctx.fillRect(
+    screenX - buildingSize / 3,
+    screenY - buildingSize / 4,
+    buildingSize * 0.4,
+    buildingSize * 0.35
+  );
+
+  // Barn roof
+  ctx.fillStyle = "#654321";
+  ctx.beginPath();
+  ctx.moveTo(screenX - buildingSize / 3 - 5, screenY - buildingSize / 4);
+  ctx.lineTo(
+    screenX - buildingSize / 3 + buildingSize * 0.2,
+    screenY - buildingSize / 4 - buildingSize * 0.2
+  );
+  ctx.lineTo(
+    screenX - buildingSize / 3 + buildingSize * 0.4 + 5,
+    screenY - buildingSize / 4
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Barn door
+  ctx.fillStyle = "#4a4a4a";
+  ctx.fillRect(
+    screenX - buildingSize / 6,
+    screenY,
+    buildingSize * 0.12,
+    buildingSize * 0.11
+  );
+
+  // Fence
+  ctx.strokeStyle = "#8b4513";
+  ctx.lineWidth = 2 * zoom;
+  for (let i = 0; i < 5; i++) {
+    const x = screenX + buildingSize / 6 + i * (buildingSize * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(x, screenY - buildingSize / 8);
+    ctx.lineTo(x, screenY + buildingSize / 8);
+    ctx.stroke();
+  }
+
+  // Horizontal fence rails
+  ctx.beginPath();
+  ctx.moveTo(screenX + buildingSize / 6, screenY - buildingSize / 16);
+  ctx.lineTo(
+    screenX + buildingSize / 6 + buildingSize * 0.48,
+    screenY - buildingSize / 16
+  );
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(screenX + buildingSize / 6, screenY + buildingSize / 16);
+  ctx.lineTo(
+    screenX + buildingSize / 6 + buildingSize * 0.48,
+    screenY + buildingSize / 16
+  );
+  ctx.stroke();
+
+  // Hay bales
+  ctx.fillStyle = "#daa520";
+  ctx.fillRect(
+    screenX - buildingSize / 2.5,
+    screenY + buildingSize / 8,
+    buildingSize * 0.15,
+    buildingSize * 0.12
+  );
+  ctx.fillRect(
+    screenX - buildingSize / 6,
+    screenY + buildingSize / 6,
+    buildingSize * 0.15,
+    buildingSize * 0.12
+  );
+
+  // Hay texture
+  ctx.strokeStyle = "#b8860b";
+  ctx.lineWidth = 1 * zoom;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(
+      screenX - buildingSize / 2.5,
+      screenY + buildingSize / 8 + i * 5
+    );
+    ctx.lineTo(
+      screenX - buildingSize / 2.5 + buildingSize * 0.15,
+      screenY + buildingSize / 8 + i * 5
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
 
 function drawHub(ctx, col, row, camera, size, zoom) {
   const pos = hexToPixel(col, row, size);
@@ -696,8 +800,7 @@ function drawTrain(ctx, hex1, hex2, progress, cargo, camera, size, zoom) {
   );
 
   ctx.restore();
-  drawInventoryStacks(ctx, trainX, trainY, {inputs:cargo}, size, zoom);
-  
+  drawInventoryStacks(ctx, trainX, trainY, { inputs: cargo }, size, zoom);
 }
 
 function getVisibleHexRange(canvas, camera, size) {

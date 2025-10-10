@@ -97,10 +97,10 @@ function completeProductionCycle(building, buildingType) {
     
     building.inventory.outputs[outputType] += outputAmount;
     
-    console.log(`🏭 ${buildingType.name} produced ${outputAmount}x ${outputType}`, {
-      tileKey: `${building.col},${building.row}`,
-      inventory: building.inventory
-    });
+    // console.log(`🏭 ${buildingType.name} produced ${outputAmount}x ${outputType}`, {
+    //   tileKey: `${building.col},${building.row}`,
+    //   inventory: building.inventory
+    // });
   }
 }
 
@@ -166,11 +166,11 @@ export function removeResourceFromBuilding(building, resourceType, amount) {
       delete building.inventory.outputs[resourceType];
     }
     
-    console.log(`📤 Removed ${actualAmount}x ${resourceType} from building`, {
-      col: building.col,
-      row: building.row,
-      remaining: building.inventory.outputs[resourceType] || 0
-    });
+    // console.log(`📤 Removed ${actualAmount}x ${resourceType} from building`, {
+    //   col: building.col,
+    //   row: building.row,
+    //   remaining: building.inventory.outputs[resourceType] || 0
+    // });
   }
   
   return actualAmount;

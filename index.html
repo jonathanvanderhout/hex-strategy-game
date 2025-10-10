@@ -587,7 +587,7 @@
 
             // Check if tile already has a building
             if (gameState.placed_buildings[tileKey]) {
-              console.log("⚠️ Tile already has a building");
+              console.log(" Tile already has a building");
               return;
             }
 
@@ -600,7 +600,7 @@
               !canPlaceBuilding(uiManager.getSelectedBuilding(), terrainType)
             ) {
               console.log(
-                "⚠️ Cannot place",
+                " Cannot place",
                 uiManager.getSelectedBuilding(),
                 "on",
                 terrainType
@@ -768,11 +768,11 @@
 
             // Helper function to handle pickup from a building
             const handlePickup = (building) => {
-                console.log("🔍 Attempting pickup from building:", {
-    type: building.type,
-    hasInventory: !!building.inventory,
-    inventory: building.inventory
-  });
+              // console.log("🔍 Attempting pickup from building:", {
+              //   type: building.type,
+              //   hasInventory: !!building.inventory,
+              //   inventory: building.inventory,
+              // });
               if (!building.inventory || !building.inventory.outputs) return;
 
               // Pick up all available outputs if there's space
@@ -794,15 +794,15 @@
                   }
                   train.cargo[resourceType] += pickedUp;
 
-                  console.log(
-                    `🚂 Train ${train.id} picked up ${pickedUp}x ${resourceType}`,
-                    {
-                      trainCargo: train.cargo,
-                      cargoSpace: `${getCurrentCargoAmount(train)}/${
-                        train.cargoCapacity
-                      }`,
-                    }
-                  );
+                  // console.log(
+                  //   `🚂 Train ${train.id} picked up ${pickedUp}x ${resourceType}`,
+                  //   {
+                  //     trainCargo: train.cargo,
+                  //     cargoSpace: `${getCurrentCargoAmount(train)}/${
+                  //       train.cargoCapacity
+                  //     }`,
+                  //   }
+                  // );
                 }
               }
             };
@@ -827,13 +827,13 @@
 
                     building.inventory.inputs[resourceType] += amount;
 
-                    console.log(
-                      `📦 Train ${train.id} delivered ${amount}x ${resourceType} to hub`,
-                      {
-                        location: `(${building.col}, ${building.row})`,
-                        hubInventory: building.inventory.inputs,
-                      }
-                    );
+                    // console.log(
+                    //   `📦 Train ${train.id} delivered ${amount}x ${resourceType} to hub`,
+                    //   {
+                    //     location: `(${building.col}, ${building.row})`,
+                    //     hubInventory: building.inventory.inputs,
+                    //   }
+                    // );
 
                     // Remove from train
                     delete train.cargo[resourceType];
