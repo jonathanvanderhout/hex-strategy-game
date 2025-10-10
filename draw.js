@@ -230,7 +230,7 @@ function drawInventoryStacks(ctx, centerX, centerY, inventory, size, zoom) {
   if (allResources.length === 0) return;
 
   // Calculate positions around the building
-  const stackDistance = size * 0.7; // Distance from building center
+  const stackDistance = size * 0.4; // Distance from building center
   const baseStackSize = size * 0.12; // Base size of each stack
 
   // Distribute resources around the building
@@ -637,7 +637,7 @@ function drawTrackBetweenHexes(ctx, hex1, hex2, camera, size, zoom) {
   ctx.stroke();
 }
 
-function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
+function drawTrain(ctx, hex1, hex2, progress, cargo, camera, size, zoom) {
   const pos1 = hexToPixel(hex1.col, hex1.row, size);
 
   let edgeIndex = -1;
@@ -696,6 +696,8 @@ function drawTrain(ctx, hex1, hex2, progress, camera, size, zoom) {
   );
 
   ctx.restore();
+  drawInventoryStacks(ctx, trainX, trainY, {inputs:cargo}, size, zoom);
+  
 }
 
 function getVisibleHexRange(canvas, camera, size) {
@@ -880,6 +882,7 @@ export function draw(ctx, params) {
           train.hex1,
           train.hex2,
           train.progress,
+          train.cargo,
           camera,
           size,
           zoom
