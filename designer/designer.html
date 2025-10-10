@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tech Tree Designer</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  overflow: hidden;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 300px 1fr 350px;
+  height: 100vh;
+}
+
+.sidebar {
+  background: #16213e;
+  border-right: 2px solid #0f3460;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.main-canvas {
+  background: #0f1419;
+  position: relative;
+  overflow: hidden;
+}
+
+.properties-panel {
+  background: #16213e;
+  border-left: 2px solid #0f3460;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+h2 {
+  color: #4ecca3;
+  margin-bottom: 15px;
+  font-size: 18px;
+  border-bottom: 2px solid #0f3460;
+  padding-bottom: 8px;
+}
+
+h3 {
+  color: #4ecca3;
+  margin: 20px 0 10px 0;
+  font-size: 14px;
+}
+
+.btn {
+  background: #0f3460;
+  color: #eee;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  margin: 5px 0;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn:hover {
+  background: #1a4d7a;
+}
+
+.btn-primary {
+  background: #4ecca3;
+  color: #16213e;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #5efcb3;
+}
+
+.btn-danger {
+  background: #e94560;
+}
+
+.btn-danger:hover {
+  background: #ff5577;
+}
+
+.form-group {
+  margin: 12px 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 8px;
+  background: #0f1419;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  color: #eee;
+  font-size: 13px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: monospace;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  background: #0f1419;
+  border: 1px solid #0f3460;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: #0f3460;
+  color: #4ecca3;
+  border-color: #4ecca3;
+}
+
+.resource-item, .tech-item, .building-item {
+  background: #0f1419;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 5px;
+  border: 1px solid #0f3460;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resource-item:hover, .tech-item:hover, .building-item:hover {
+  border-color: #4ecca3;
+  background: #1a1f2e;
+}
+
+.resource-item.selected, .tech-item.selected, .building-item.selected {
+  border-color: #4ecca3;
+  background: #1a4d7a;
+}
+
+.resource-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #0f3460;
+  border-radius: 3px;
+  font-size: 11px;
+  margin: 2px;
+}
+
+.cost-input-group {
+  display: flex;
+  gap: 5px;
+  margin: 5px 0;
+  align-items: center;
+}
+
+.cost-input-group select {
+  flex: 1;
+}
+
+.cost-input-group input {
+  flex: 1;
+}
+
+.cost-input-group button {
+  padding: 8px 12px;
+  background: #e94560;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+#canvas:active {
+  cursor: grabbing;
+}
+
+.export-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #0f3460;
+}
+
+.json-preview {
+  background: #0f1419;
+  padding: 10px;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 11px;
+  margin: 10px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+}
+
+.array-input {
+  background: #0f1419;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 5px 0;
+}
+
+.array-input-item {
+  display: flex;
+  gap: 5px;
+  margin: 5px 0;
+}
+
+.node {
+  position: absolute;
+  padding: 15px;
+  background: #16213e;
+  border: 2px solid #0f3460;
+  border-radius: 8px;
+  cursor: move;
+  min-width: 150px;
+  user-select: none;
+}
+
+.node.selected {
+  border-color: #4ecca3;
+  box-shadow: 0 0 20px rgba(78, 204, 163, 0.3);
+}
+
+.node-title {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #4ecca3;
+}
+
+.node-type {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.node-content {
+  font-size: 12px;
+  color: #ccc;
+}
+
+.scroll-hint {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  color: #666;
+  font-size: 11px;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Left Sidebar -->
+  <div class="sidebar">
+    <h2>🎮 Game Designer</h2>
+    
+    <div class="tab-buttons">
+      <button class="tab-btn active" onclick="switchTab('resources')">Resources</button>
+      <button class="tab-btn" onclick="switchTab('buildings')">Buildings</button>
+      <button class="tab-btn" onclick="switchTab('techs')">Tech Tree</button>
+      <button class="tab-btn" onclick="switchTab('trains')">Trains</button>
+    </div>
+
+    <div id="resources-tab" class="tab-content">
+      <button class="btn btn-primary" onclick="addResource()">+ Add Resource</button>
+      <div id="resources-list"></div>
+    </div>
+
+    <div id="buildings-tab" class="tab-content" style="display:none;">
+      <button class="btn btn-primary" onclick="addBuilding()">+ Add Building</button>
+      <div id="buildings-list"></div>
+    </div>
+
+    <div id="techs-tab" class="tab-content" style="display:none;">
+      <button class="btn btn-primary" onclick="addTech()">+ Add Tech</button>
+      <div id="techs-list"></div>
+    </div>
+
+    <div id="trains-tab" class="tab-content" style="display:none;">
+      <button class="btn btn-primary" onclick="addTrain()">+ Add Train Type</button>
+      <div id="trains-list"></div>
+    </div>
+  </div>
+
+  <!-- Main Canvas -->
+  <div class="main-canvas">
+    <canvas id="canvas"></canvas>
+    <div class="scroll-hint">Mouse wheel to zoom • Drag to pan</div>
+  </div>
+
+  <!-- Properties Panel -->
+  <div class="properties-panel">
+    <h2>Properties</h2>
+    <div id="properties-content">
+      <p style="color: #888; font-size: 13px;">Select an item to edit properties</p>
+    </div>
+
+    <div class="export-section">
+      <h2>Export Configuration</h2>
+      <button class="btn btn-primary" onclick="exportJSON()">📋 Copy JSON to Clipboard</button>
+      <button class="btn" onclick="downloadJSON()">💾 Download JSON File</button>
+      <button class="btn" onclick="loadFromJSON()">📂 Load from JSON</button>
+      <input type="file" id="jsonFileInput" accept=".json" style="display:none;" onchange="handleFileLoad(event)">
+    </div>
+  </div>
+</div>
+
+<script>
+// Game Configuration Data
+let gameConfig = {
+  resources: {},
+  buildings: {},
+  techs: {},
+  trains: {},
+  nextId: {
+    resource: 1,
+    building: 1,
+    tech: 1,
+    train: 1
+  }
+};
+
+let selectedItem = null;
+let selectedType = null;
+let currentTab = 'resources';
+
+// Canvas for tech tree visualization
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let camera = { x: 0, y: 0, zoom: 1 };
+let isDragging = false;
+let dragStart = { x: 0, y: 0 };
+
+// Initialize with some default data
+function initializeDefaults() {
+  // Default resources
+  gameConfig.resources = {
+    'food': { id: 'food', name: 'Food', icon: '🌾', color: '#f1c40f', tier: 1 },
+    'wood': { id: 'wood', name: 'Wood', icon: '🪵', color: '#8b4513', tier: 1 },
+    'ore': { id: 'ore', name: 'Ore', icon: '⛏️', color: '#7f8c8d', tier: 1 },
+    'stone': { id: 'stone', name: 'Stone', icon: '🪨', color: '#95a5a6', tier: 1 },
+    'planks': { id: 'planks', name: 'Planks', icon: '📏', color: '#d35400', tier: 2 },
+    'metal': { id: 'metal', name: 'Metal', icon: '⚙️', color: '#34495e', tier: 2 }
+  };
+
+  // Default buildings
+  gameConfig.buildings = {
+    'hub': {
+      id: 'hub',
+      name: 'Hub',
+      icon: '🏛️',
+      tier: 0,
+      isHub: true,
+      unlocked: true,
+      allowedTerrain: ['Grass'],
+      placementCost: {},
+      produces: {},
+      consumes: {},
+      productionSpeed: 0,
+      storageLimit: -1
+    },
+    'farm': {
+      id: 'farm',
+      name: 'Farm',
+      icon: '🌾',
+      tier: 1,
+      unlocked: true,
+      allowedTerrain: ['Grass'],
+      placementCost: {},
+      produces: { food: 1 },
+      consumes: {},
+      productionSpeed: 0.005,
+      storageLimit: 100
+    },
+    'lumberyard': {
+      id: 'lumberyard',
+      name: 'Lumberyard',
+      icon: '🪵',
+      tier: 1,
+      unlocked: true,
+      allowedTerrain: ['Forest'],
+      placementCost: {},
+      produces: { wood: 1 },
+      consumes: {},
+      productionSpeed: 0.005,
+      storageLimit: 100
+    }
+  };
+
+  // Default tech tree
+  gameConfig.techs = {
+    'basic_mining': {
+      id: 'basic_mining',
+      name: 'Mining Operations',
+      description: 'Unlock the ability to extract ore and stone from mountains',
+      tier: 1,
+      cost: { wood: 500, food: 200 },
+      unlocks: ['mine', 'quarry'],
+      requires: [],
+      position: { x: 100, y: 100 }
+    }
+  };
+
+  // Default trains
+  gameConfig.trains = {
+    'standard': {
+      id: 'standard',
+      name: 'Standard Train',
+      icon: '🚂',
+      speed: 0.02,
+      cargoCapacity: 1000,
+      spawnCost: {},
+      unlocked: true
+    }
+  };
+}
+
+// Tab switching
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+  
+  event.target.classList.add('active');
+  document.getElementById(`${tab}-tab`).style.display = 'block';
+  
+  renderList();
+  drawCanvas();
+}
+
+// Add new items
+function addResource() {
+  const id = `resource_${gameConfig.nextId.resource++}`;
+  gameConfig.resources[id] = {
+    id: id,
+    name: 'New Resource',
+    icon: '📦',
+    color: '#3498db',
+    tier: 1
+  };
+  renderList();
+  selectItem(id, 'resource');
+}
+
+function addBuilding() {
+  const id = `building_${gameConfig.nextId.building++}`;
+  gameConfig.buildings[id] = {
+    id: id,
+    name: 'New Building',
+    icon: '🏭',
+    tier: 1,
+    unlocked: false,
+    allowedTerrain: ['Grass'],
+    placementCost: {},
+    produces: {},
+    consumes: {},
+    productionSpeed: 0.005,
+    storageLimit: 100,
+    isHub: false
+  };
+  renderList();
+  selectItem(id, 'building');
+}
+
+function addTech() {
+  const id = `tech_${gameConfig.nextId.tech++}`;
+  gameConfig.techs[id] = {
+    id: id,
+    name: 'New Technology',
+    description: 'Description of this technology',
+    tier: 1,
+    cost: {},
+    unlocks: [],
+    requires: [],
+    position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 }
+  };
+  renderList();
+  selectItem(id, 'tech');
+  drawCanvas();
+}
+
+function addTrain() {
+  const id = `train_${gameConfig.nextId.train++}`;
+  gameConfig.trains[id] = {
+    id: id,
+    name: 'New Train',
+    icon: '🚂',
+    speed: 0.02,
+    cargoCapacity: 1000,
+    spawnCost: {},
+    unlocked: false
+  };
+  renderList();
+  selectItem(id, 'train');
+}
+
+// Delete item
+function deleteItem(id, type) {
+  if (confirm(`Delete ${gameConfig[type + 's'][id].name}?`)) {
+    delete gameConfig[type + 's'][id];
+    if (selectedItem === id) {
+      selectedItem = null;
+      selectedType = null;
+    }
+    renderList();
+    renderProperties();
+    drawCanvas();
+  }
+}
+
+// Select item
+function selectItem(id, type) {
+  selectedItem = id;
+  selectedType = type;
+  renderList();
+  renderProperties();
+}
+
+// Render list based on current tab
+function renderList() {
+  let html = '';
+  let listId = '';
+  
+  if (currentTab === 'resources') {
+    listId = 'resources-list';
+    Object.values(gameConfig.resources).forEach(resource => {
+      const selected = selectedItem === resource.id && selectedType === 'resource' ? 'selected' : '';
+      html += `
+        <div class="resource-item ${selected}" onclick="selectItem('${resource.id}', 'resource')">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>${resource.icon} ${resource.name}</span>
+            <span class="resource-badge">T${resource.tier}</span>
+          </div>
+        </div>
+      `;
+    });
+  } else if (currentTab === 'buildings') {
+    listId = 'buildings-list';
+    Object.values(gameConfig.buildings).forEach(building => {
+      const selected = selectedItem === building.id && selectedType === 'building' ? 'selected' : '';
+      const locked = building.unlocked ? '' : '🔒';
+      html += `
+        <div class="building-item ${selected}" onclick="selectItem('${building.id}', 'building')">
+          <div>${locked}${building.icon} ${building.name}</div>
+          <div style="font-size: 11px; color: #888; margin-top: 3px;">Tier ${building.tier}</div>
+        </div>
+      `;
+    });
+  } else if (currentTab === 'techs') {
+    listId = 'techs-list';
+    Object.values(gameConfig.techs).forEach(tech => {
+      const selected = selectedItem === tech.id && selectedType === 'tech' ? 'selected' : '';
+      html += `
+        <div class="tech-item ${selected}" onclick="selectItem('${tech.id}', 'tech')">
+          <div>${tech.name}</div>
+          <div style="font-size: 11px; color: #888; margin-top: 3px;">
+            Unlocks: ${tech.unlocks.length} items
+          </div>
+        </div>
+      `;
+    });
+  } else if (currentTab === 'trains') {
+    listId = 'trains-list';
+    Object.values(gameConfig.trains).forEach(train => {
+      const selected = selectedItem === train.id && selectedType === 'train' ? 'selected' : '';
+      const locked = train.unlocked ? '' : '🔒';
+      html += `
+        <div class="building-item ${selected}" onclick="selectItem('${train.id}', 'train')">
+          <div>${locked}${train.icon} ${train.name}</div>
+          <div style="font-size: 11px; color: #888; margin-top: 3px;">
+            Speed: ${train.speed} | Capacity: ${train.cargoCapacity}
+          </div>
+        </div>
+      `;
+    });
+  }
+  
+  document.getElementById(listId).innerHTML = html || '<p style="color: #888; font-size: 12px;">No items yet</p>';
+}
+
+// Render properties panel
+function renderProperties() {
+  if (!selectedItem || !selectedType) {
+    document.getElementById('properties-content').innerHTML = '<p style="color: #888; font-size: 13px;">Select an item to edit properties</p>';
+    return;
+  }
+
+  let item = gameConfig[selectedType + 's'][selectedItem];
+  let html = '';
+
+  if (selectedType === 'resource') {
+    html = `
+      <div class="form-group">
+        <label>Resource ID</label>
+        <input type="text" value="${item.id}" disabled>
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" value="${item.name}" onchange="updateProperty('name', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Icon (emoji)</label>
+        <input type="text" value="${item.icon}" onchange="updateProperty('icon', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Color (hex)</label>
+        <input type="color" value="${item.color}" onchange="updateProperty('color', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Tier</label>
+        <input type="number" value="${item.tier}" min="1" onchange="updateProperty('tier', parseInt(this.value))">
+      </div>
+      <button class="btn btn-danger" onclick="deleteItem('${item.id}', 'resource')">Delete Resource</button>
+    `;
+  } else if (selectedType === 'building') {
+    html = `
+      <div class="form-group">
+        <label>Building ID</label>
+        <input type="text" value="${item.id}" disabled>
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" value="${item.name}" onchange="updateProperty('name', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Icon (emoji)</label>
+        <input type="text" value="${item.icon}" onchange="updateProperty('icon', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Tier</label>
+        <input type="number" value="${item.tier}" min="0" onchange="updateProperty('tier', parseInt(this.value))">
+      </div>
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="unlocked" ${item.unlocked ? 'checked' : ''} onchange="updateProperty('unlocked', this.checked)">
+        <label for="unlocked" style="margin: 0;">Unlocked from start</label>
+      </div>
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="isHub" ${item.isHub ? 'checked' : ''} onchange="updateProperty('isHub', this.checked)">
+        <label for="isHub" style="margin: 0;">Is Hub (accepts deliveries)</label>
+      </div>
+      <div class="form-group">
+        <label>Production Speed</label>
+        <input type="number" step="0.001" value="${item.productionSpeed}" onchange="updateProperty('productionSpeed', parseFloat(this.value))">
+      </div>
+      <div class="form-group">
+        <label>Storage Limit (-1 = infinite)</label>
+        <input type="number" value="${item.storageLimit}" onchange="updateProperty('storageLimit', parseInt(this.value))">
+      </div>
+      <h3>Allowed Terrain</h3>
+      ${renderArrayEditor('allowedTerrain', item.allowedTerrain, ['Water', 'Sand', 'Grass', 'Forest', 'Mountain'])}
+      <h3>Placement Cost</h3>
+      ${renderCostEditor('placementCost', item.placementCost)}
+      <h3>Produces</h3>
+      ${renderCostEditor('produces', item.produces)}
+      <h3>Consumes</h3>
+      ${renderCostEditor('consumes', item.consumes)}
+      <button class="btn btn-danger" onclick="deleteItem('${item.id}', 'building')">Delete Building</button>
+    `;
+  } else if (selectedType === 'tech') {
+    html = `
+      <div class="form-group">
+        <label>Tech ID</label>
+        <input type="text" value="${item.id}" disabled>
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" value="${item.name}" onchange="updateProperty('name', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea onchange="updateProperty('description', this.value)">${item.description}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Tier</label>
+        <input type="number" value="${item.tier}" min="1" onchange="updateProperty('tier', parseInt(this.value))">
+      </div>
+      <h3>Research Cost</h3>
+      ${renderCostEditor('cost', item.cost)}
+      <h3>Unlocks (Building IDs)</h3>
+      ${renderArrayEditor('unlocks', item.unlocks, Object.keys(gameConfig.buildings))}
+      <h3>Requires (Tech IDs)</h3>
+      ${renderArrayEditor('requires', item.requires, Object.keys(gameConfig.techs).filter(id => id !== item.id))}
+      <button class="btn btn-danger" onclick="deleteItem('${item.id}', 'tech')">Delete Tech</button>
+    `;
+  } else if (selectedType === 'train') {
+    html = `
+      <div class="form-group">
+        <label>Train ID</label>
+        <input type="text" value="${item.id}" disabled>
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" value="${item.name}" onchange="updateProperty('name', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Icon (emoji)</label>
+        <input type="text" value="${item.icon}" onchange="updateProperty('icon', this.value)">
+      </div>
+      <div class="form-group">
+        <label>Speed</label>
+        <input type="number" step="0.001" value="${item.speed}" onchange="updateProperty('speed', parseFloat(this.value))">
+      </div>
+      <div class="form-group">
+        <label>Cargo Capacity</label>
+        <input type="number" value="${item.cargoCapacity}" onchange="updateProperty('cargoCapacity', parseInt(this.value))">
+      </div>
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="trainUnlocked" ${item.unlocked ? 'checked' : ''} onchange="updateProperty('unlocked', this.checked)">
+        <label for="trainUnlocked" style="margin: 0;">Unlocked from start</label>
+      </div>
+      <h3>Spawn Cost</h3>
+      ${renderCostEditor('spawnCost', item.spawnCost)}
+      <button class="btn btn-danger" onclick="deleteItem('${item.id}', 'train')">Delete Train Type</button>
+    `;
+  }
+
+  document.getElementById('properties-content').innerHTML = html;
+}
+
+// Render cost editor
+function renderCostEditor(property, costs) {
+  let html = '<div class="array-input">';
+  
+  Object.entries(costs).forEach(([resource, amount]) => {
+    html += `
+      <div class="cost-input-group">
+        <select disabled>
+          <option>${gameConfig.resources[resource]?.name || resource}</option>
+        </select>
+        <input type="number" value="${amount}" onchange="updateCostAmount('${property}', '${resource}', parseInt(this.value))">
+        <button onclick="removeCost('${property}', '${resource}')">✕</button>
+      </div>
+    `;
+  });
+  
+  html += `
+    <div class="cost-input-group">
+      <select id="${property}-select">
+        <option value="">+ Add resource...</option>
+        ${Object.values(gameConfig.resources).map(r => 
+          `<option value="${r.id}">${r.icon} ${r.name}</option>`
+        ).join('')}
+      </select>
+      <input type="number" id="${property}-amount" placeholder="Amount" min="1" value="1">
+      <button onclick="addCost('${property}')">+</button>
+    </div>
+  `;
+  
+  html += '</div>';
+  return html;
+}
+
+// Render array editor
+function renderArrayEditor(property, items, options) {
+  let html = '<div class="array-input">';
+  
+  items.forEach((item, index) => {
+    html += `
+      <div class="array-input-item">
+        <input type="text" value="${item}" disabled style="flex: 1;">
+        <button onclick="removeFromArray('${property}', ${index})" style="padding: 8px 12px; background: #e94560; border: none; border-radius: 4px; color: white; cursor: pointer;">✕</button>
+      </div>
+    `;
+  });
+  
+  html += `
+    <div class="array-input-item">
+      <select id="${property}-select" style="flex: 1;">
+        <option value="">+ Add...</option>
+        ${options.filter(opt => !items.includes(opt)).map(opt => 
+          `<option value="${opt}">${opt}</option>`
+        ).join('')}
+      </select>
+      <button onclick="addToArray('${property}')" style="padding: 8px 12px; background: #4ecca3; border: none; border-radius: 4px; color: #16213e; cursor: pointer; font-weight: 600;">+</button>
+    </div>
+  `;
+  
+  html += '</div>';
+  return html;
+}
+
+// Update property
+function updateProperty(key, value) {
+  if (selectedItem && selectedType) {
+    gameConfig[selectedType + 's'][selectedItem][key] = value;
+    renderList();
+    drawCanvas();
+  }
+}
+
+// Cost management
+function addCost(property) {
+  const select = document.getElementById(`${property}-select`);
+  const amountInput = document.getElementById(`${property}-amount`);
+  const resource = select.value;
+  const amount = parseInt(amountInput.value) || 1;
+  
+  if (resource && selectedItem && selectedType) {
+    gameConfig[selectedType + 's'][selectedItem][property][resource] = amount;
+    select.value = '';
+    amountInput.value = '1';
+    renderProperties();
+  }
+}
+
+function removeCost(property, resource) {
+  if (selectedItem && selectedType) {
+    delete gameConfig[selectedType + 's'][selectedItem][property][resource];
+    renderProperties();
+  }
+}
+
+function updateCostAmount(property, resource, amount) {
+  if (selectedItem && selectedType) {
+    gameConfig[selectedType + 's'][selectedItem][property][resource] = amount;
+  }
+}
+
+// Array management
+function addToArray(property) {
+  const select = document.getElementById(`${property}-select`);
+  const value = select.value;
+  
+  if (value && selectedItem && selectedType) {
+    if (!gameConfig[selectedType + 's'][selectedItem][property].includes(value)) {
+      gameConfig[selectedType + 's'][selectedItem][property].push(value);
+      select.value = '';
+      renderProperties();
+      drawCanvas();
+    }
+  }
+}
+
+function removeFromArray(property, index) {
+  if (selectedItem && selectedType) {
+    gameConfig[selectedType + 's'][selectedItem][property].splice(index, 1);
+    renderProperties();
+    drawCanvas();
+  }
+}
+
+// Canvas drawing for tech tree visualization
+function resizeCanvas() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  drawCanvas();
+}
+
+function drawCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  if (currentTab !== 'techs') return;
+  
+  ctx.save();
+  ctx.translate(camera.x, camera.y);
+  ctx.scale(camera.zoom, camera.zoom);
+  
+  // Draw connections first
+  Object.values(gameConfig.techs).forEach(tech => {
+    tech.requires.forEach(reqId => {
+      const reqTech = gameConfig.techs[reqId];
+      if (reqTech) {
+        ctx.strokeStyle = '#4ecca3';
+        ctx.lineWidth = 2 / camera.zoom;
+        ctx.beginPath();
+        ctx.moveTo(reqTech.position.x + 75, reqTech.position.y + 40);
+        ctx.lineTo(tech.position.x + 75, tech.position.y + 40);
+        ctx.stroke();
+        
+        // Arrow head
+        const angle = Math.atan2(tech.position.y - reqTech.position.y, tech.position.x - reqTech.position.x);
+        const arrowSize = 10 / camera.zoom;
+        ctx.beginPath();
+        ctx.moveTo(tech.position.x + 75, tech.position.y + 40);
+        ctx.lineTo(
+          tech.position.x + 75 - arrowSize * Math.cos(angle - Math.PI / 6),
+          tech.position.y + 40 - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          tech.position.x + 75 - arrowSize * Math.cos(angle + Math.PI / 6),
+          tech.position.y + 40 - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fillStyle = '#4ecca3';
+        ctx.fill();
+      }
+    });
+  });
+  
+  // Draw tech nodes
+  Object.values(gameConfig.techs).forEach(tech => {
+    const isSelected = selectedItem === tech.id && selectedType === 'tech';
+    
+    // Node background
+    ctx.fillStyle = '#16213e';
+    ctx.strokeStyle = isSelected ? '#4ecca3' : '#0f3460';
+    ctx.lineWidth = isSelected ? 3 / camera.zoom : 2 / camera.zoom;
+    
+    roundRect(ctx, tech.position.x, tech.position.y, 150, 80, 8);
+    ctx.fill();
+    ctx.stroke();
+    
+    // Title
+    ctx.fillStyle = '#4ecca3';
+    ctx.font = `bold ${14 / camera.zoom}px sans-serif`;
+    ctx.fillText(tech.name, tech.position.x + 10, tech.position.y + 20);
+    
+    // Tier
+    ctx.fillStyle = '#888';
+    ctx.font = `${11 / camera.zoom}px sans-serif`;
+    ctx.fillText(`Tier ${tech.tier}`, tech.position.x + 10, tech.position.y + 35);
+    
+    // Cost
+    ctx.fillStyle = '#ccc';
+    ctx.font = `${10 / camera.zoom}px sans-serif`;
+    let costY = tech.position.y + 50;
+    Object.entries(tech.cost).forEach(([resource, amount]) => {
+      const res = gameConfig.resources[resource];
+      if (res) {
+        ctx.fillText(`${res.icon} ${amount}`, tech.position.x + 10, costY);
+        costY += 12;
+      }
+    });
+  });
+  
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+// Canvas interaction
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left - camera.x) / camera.zoom;
+  const y = (e.clientY - rect.top - camera.y) / camera.zoom;
+  
+  if (currentTab === 'techs') {
+    // Check if clicked on a tech node
+    let clickedTech = null;
+    Object.values(gameConfig.techs).forEach(tech => {
+      if (x >= tech.position.x && x <= tech.position.x + 150 &&
+          y >= tech.position.y && y <= tech.position.y + 80) {
+        clickedTech = tech.id;
+      }
+    });
+    
+    if (clickedTech) {
+      selectItem(clickedTech, 'tech');
+      isDragging = true;
+      dragStart = { x: x - gameConfig.techs[clickedTech].position.x, y: y - gameConfig.techs[clickedTech].position.y };
+    } else {
+      isDragging = true;
+      dragStart = { x: e.clientX - camera.x, y: e.clientY - camera.y };
+    }
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  
+  if (currentTab === 'techs' && selectedItem && selectedType === 'tech') {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left - camera.x) / camera.zoom;
+    const y = (e.clientY - rect.top - camera.y) / camera.zoom;
+    
+    gameConfig.techs[selectedItem].position.x = x - dragStart.x;
+    gameConfig.techs[selectedItem].position.y = y - dragStart.y;
+    drawCanvas();
+  } else {
+    camera.x = e.clientX - dragStart.x;
+    camera.y = e.clientY - dragStart.y;
+    drawCanvas();
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  isDragging = false;
+});
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  
+  const oldZoom = camera.zoom;
+  camera.zoom *= e.deltaY < 0 ? 1.1 : 0.9;
+  camera.zoom = Math.max(0.2, Math.min(3, camera.zoom));
+  
+  // Zoom towards mouse position
+  const zoomChange = camera.zoom / oldZoom;
+  camera.x = mouseX - (mouseX - camera.x) * zoomChange;
+  camera.y = mouseY - (mouseY - camera.y) * zoomChange;
+  
+  drawCanvas();
+});
+
+// Export functions
+function exportJSON() {
+  const json = JSON.stringify(gameConfig, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    alert('Configuration copied to clipboard!');
+  });
+}
+
+function downloadJSON() {
+  const json = JSON.stringify(gameConfig, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'game-config.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadFromJSON() {
+  document.getElementById('jsonFileInput').click();
+}
+
+function handleFileLoad(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const loaded = JSON.parse(e.target.result);
+      if (confirm('This will replace your current configuration. Continue?')) {
+        gameConfig = loaded;
+        renderList();
+        renderProperties();
+        drawCanvas();
+        alert('Configuration loaded successfully!');
+      }
+    } catch (err) {
+      alert('Error loading file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Initialize
+window.addEventListener('resize', resizeCanvas);
+initializeDefaults();
+resizeCanvas();
+renderList();
+</script>
+</body>
+</html>
