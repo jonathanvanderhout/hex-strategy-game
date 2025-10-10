@@ -7,7 +7,7 @@ import { getBuildingType } from './buildingTypes.js';
  * @param {Object} gameState - The game state object containing placed_buildings
  * @param {number} deltaTime - Time elapsed since last update (in milliseconds)
  */
-export function updateBuildings(gameState, deltaTime = 16.67) {
+export function updateBuildings(gameState) {
   // Iterate through all placed buildings
   for (let tileKey in gameState.placed_buildings) {
     const building = gameState.placed_buildings[tileKey];

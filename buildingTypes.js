@@ -9,7 +9,7 @@ export const BUILDING_TYPES = {
     allowedTerrain: ['GRASS'],
     produces: { type: 'food', amount: 1 },
     consumes: [],
-    productionSpeed: 0.003, // progress per frame (smaller = slower)
+    productionSpeed: 0.3, // progress per frame (smaller = slower)
     unlocked: true,
   },
   
@@ -20,7 +20,7 @@ export const BUILDING_TYPES = {
     allowedTerrain: ['FOREST'],
     produces: { type: 'wood', amount: 1 },
     consumes: [],
-    productionSpeed: 0.005,
+    productionSpeed: 0.5,
     unlocked: true,
   },
   
