@@ -8,8 +8,28 @@ export class UIManager {
     this.mode = 'place';
     this.selectedBuildingType = 'farm';
     
+    this.createResourceDisplayHTML();
     this.createBuildingPaletteHTML();
     this.init();
+  }
+  
+  createResourceDisplayHTML() {
+    const controlsDiv = document.getElementById('controls');
+    if (!controlsDiv) {
+      console.error('Controls div not found!');
+      return;
+    }
+    
+    const resourceHTML = `
+      <div id="resource-display">
+        <div style="font-size: 11px; margin-bottom: 5px; color: #aaa;">
+          Hub Resources:
+        </div>
+        <div id="resource-totals"></div>
+      </div>
+    `;
+    
+    controlsDiv.insertAdjacentHTML('afterbegin', resourceHTML);
   }
   
   createBuildingPaletteHTML() {
@@ -34,6 +54,31 @@ export class UIManager {
       const style = document.createElement('style');
       style.id = 'ui-styles';
       style.textContent = `
+        #resource-display {
+          margin-bottom: 15px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #666;
+        }
+        #resource-totals {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .resource-item {
+          background: #2a2a2a;
+          border: 1px solid #555;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          color: #fff;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .resource-amount {
+          font-weight: bold;
+          color: #4a9eff;
+        }
         #building-palette {
           display: none;
           margin-top: 10px;
@@ -76,6 +121,22 @@ export class UIManager {
   init() {
     this.setupModeButtons();
     this.setupBuildingPalette();
+    this.updateResourceDisplay();
+    this.startResourceRefreshLoop();
+  }
+  
+  startResourceRefreshLoop() {
+    // Update resource display every 500ms
+    this.resourceRefreshInterval = setInterval(() => {
+      this.updateResourceDisplay();
+    }, 500);
+  }
+  
+  destroy() {
+    // Clean up interval when UI is destroyed
+    if (this.resourceRefreshInterval) {
+      clearInterval(this.resourceRefreshInterval);
+    }
   }
   
   setupModeButtons() {
@@ -146,6 +207,48 @@ export class UIManager {
     });
   }
   
+  updateResourceDisplay() {
+    const container = document.getElementById('resource-totals');
+    if (!container) return;
+    
+    const hubTotals = this.gameState.hubResourceTotals || {};
+    
+    // Clear existing display
+    container.innerHTML = '';
+    
+    // If no resources, show a message
+    if (Object.keys(hubTotals).length === 0) {
+      container.innerHTML = '<div style="color: #888; font-size: 11px;">No resources yet</div>';
+      return;
+    }
+    
+    // Display each resource type
+    Object.entries(hubTotals).forEach(([resourceType, amount]) => {
+      const resourceItem = document.createElement('div');
+      resourceItem.className = 'resource-item';
+      
+      // Get emoji for resource type (you can customize this mapping)
+      const resourceEmojis = {
+        wood: '🪵',
+        iron: '⛏️',
+        coal: '🪨',
+        steel: '🔩',
+        food: '🌾',
+        // Add more as needed
+      };
+      
+      const emoji = resourceEmojis[resourceType] || '📦';
+      
+      resourceItem.innerHTML = `
+        <span>${emoji}</span>
+        <span>${resourceType}:</span>
+        <span class="resource-amount">${Math.floor(amount)}</span>
+      `;
+      
+      container.appendChild(resourceItem);
+    });
+  }
+  
   selectBuilding(buildingTypeId) {
     this.selectedBuildingType = buildingTypeId;
     this.updateBuildingPalette();
@@ -167,5 +270,10 @@ export class UIManager {
     if (this.mode === 'building') {
       this.updateBuildingPalette();
     }
+  }
+  
+  // Call this method periodically to refresh the resource display
+  refresh() {
+    this.updateResourceDisplay();
   }
 }

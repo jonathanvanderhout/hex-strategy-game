@@ -9,8 +9,9 @@ export const BUILDING_TYPES = {
     allowedTerrain: ['GRASS'],
     produces: { type: 'food', amount: 1 },
     consumes: [],
-    productionSpeed: 0.3, // progress per frame (smaller = slower)
+    productionSpeed: 0.0025, 
     unlocked: true,
+    cost:{wood:3}
   },
   
   LUMBERYARD: {
@@ -20,8 +21,9 @@ export const BUILDING_TYPES = {
     allowedTerrain: ['FOREST'],
     produces: { type: 'wood', amount: 1 },
     consumes: [],
-    productionSpeed: 0.5,
+    productionSpeed: 0.005,
     unlocked: true,
+    cost:{wood:6, food:9}
   },
   
   MINE: {

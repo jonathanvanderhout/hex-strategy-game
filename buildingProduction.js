@@ -2,18 +2,46 @@
 
 import { getBuildingType } from './buildingTypes.js';
 
+
 /**
  * Update all buildings' production progress and handle resource generation/consumption
  * @param {Object} gameState - The game state object containing placed_buildings
  * @param {number} deltaTime - Time elapsed since last update (in milliseconds)
  */
 export function updateBuildings(gameState) {
+  // Initialize hub resource totals tracker
+  const hubResourceTotals = {};
+  
   // Iterate through all placed buildings
   for (let tileKey in gameState.placed_buildings) {
     const building = gameState.placed_buildings[tileKey];
     const buildingType = getBuildingType(building.type);
     
-    if (!buildingType || buildingType.productionSpeed === 0) continue;
+    if (!buildingType) continue;
+    
+    // Track hub inventories
+    if (building.type === 'hub') {
+      if (building.inventory && building.inventory.outputs) {
+        for (let resourceType in building.inventory.outputs) {
+          if (!hubResourceTotals[resourceType]) {
+            hubResourceTotals[resourceType] = 0;
+          }
+          hubResourceTotals[resourceType] += building.inventory.outputs[resourceType];
+        }
+      }
+      // Also check inputs if hubs store resources there
+      if (building.inventory && building.inventory.inputs) {
+        for (let resourceType in building.inventory.inputs) {
+          if (!hubResourceTotals[resourceType]) {
+            hubResourceTotals[resourceType] = 0;
+          }
+          hubResourceTotals[resourceType] += building.inventory.inputs[resourceType];
+        }
+      }
+    }
+    
+    // Skip production for buildings with no production speed
+    if (buildingType.productionSpeed === 0) continue;
     
     // Initialize inventory if it doesn't exist
     if (!building.inventory) {
@@ -42,7 +70,11 @@ export function updateBuildings(gameState) {
       // building.productionProgress = Math.max(0, building.productionProgress - 0.001);
     }
   }
+  
+  // Store hub totals in game state
+  gameState.hubResourceTotals = hubResourceTotals;
 }
+
 
 /**
  * Check if building has required inputs to produce
