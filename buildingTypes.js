@@ -1,7 +1,20 @@
 // buildingTypes.js
 
 export const BUILDING_TYPES = {
+    // Special buildings
+  HUB: {
+    id: 'hub',
+    name: 'Hub',
+    emoji: '🏛️',
+    allowedTerrain: ['GRASS'],
+    produces: null,
+    consumes: [],
+    productionSpeed: 0,
+    unlocked: true,
+    isHub: true,
+  },
   // Tier 1 - Resource Gatherers (no inputs)
+
   FARM: {
     id: 'farm',
     name: 'Farm',
@@ -71,18 +84,7 @@ export const BUILDING_TYPES = {
     unlocked: false,
   },
   
-  // Special buildings
-  HUB: {
-    id: 'hub',
-    name: 'Hub',
-    emoji: '🏛️',
-    allowedTerrain: ['GRASS'],
-    produces: null,
-    consumes: [],
-    productionSpeed: 0,
-    unlocked: true,
-    isHub: true,
-  },
+
 };
 
 // Helper function to get building type by id

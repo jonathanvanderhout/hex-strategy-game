@@ -113,6 +113,14 @@ export class UIManager {
         .building-option.selected:hover {
           background: #5aaaff;
         }
+        .building-cost {
+          font-size: 10px;
+          color: #aaa;
+          margin-top: 2px;
+        }
+        .building-cost.insufficient {
+          color: #ff6b6b;
+        }
       `;
       document.head.appendChild(style);
     }
@@ -129,6 +137,8 @@ export class UIManager {
     // Update resource display every 500ms
     this.resourceRefreshInterval = setInterval(() => {
       this.updateResourceDisplay();
+      // Also refresh building palette to update affordability
+      this.refreshBuildingPalette();
     }, 500);
   }
   
@@ -176,6 +186,37 @@ export class UIManager {
     this.updateBuildingPalette();
   }
   
+  canAffordBuilding(buildingType) {
+    // Buildings without a cost can always be placed
+    if (!buildingType.cost) return true;
+    
+    const hubTotals = this.gameState.hubResourceTotals || {};
+    
+    // Check if we have enough of each resource
+    for (const [resourceType, requiredAmount] of Object.entries(buildingType.cost)) {
+      const availableAmount = hubTotals[resourceType] || 0;
+      if (availableAmount < requiredAmount) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  formatBuildingCost(buildingType) {
+    if (!buildingType.cost) return '';
+    
+    const hubTotals = this.gameState.hubResourceTotals || {};
+    const costParts = [];
+    
+    for (const [resourceType, amount] of Object.entries(buildingType.cost)) {
+      const available = hubTotals[resourceType] || 0;
+      costParts.push(`${resourceType}: ${Math.floor(available)}/${amount}`);
+    }
+    
+    return costParts.join(', ');
+  }
+  
   updateBuildingPalette() {
     const container = document.getElementById('building-options');
     if (!container) return;
@@ -186,11 +227,18 @@ export class UIManager {
       const button = document.createElement('button');
       button.className = 'building-option';
       button.dataset.buildingType = buildingType.id;
-      button.textContent = `${buildingType.emoji} ${buildingType.name}`;
       
-      if (!buildingType.unlocked) {
+      const canAfford = this.canAffordBuilding(buildingType);
+      const costText = this.formatBuildingCost(buildingType);
+      
+      button.innerHTML = `
+        <div>${buildingType.emoji} ${buildingType.name}</div>
+        ${costText ? `<div class="building-cost ${!canAfford ? 'insufficient' : ''}">${costText}</div>` : ''}
+      `;
+      
+      if (!canAfford) {
         button.classList.add('locked');
-        button.title = 'Locked - unlock by gathering resources';
+        button.title = 'Not enough resources';
       }
       
       if (buildingType.id === this.selectedBuildingType) {
@@ -198,7 +246,7 @@ export class UIManager {
       }
       
       button.addEventListener('click', () => {
-        if (buildingType.unlocked) {
+        if (canAfford) {
           this.selectBuilding(buildingType.id);
         }
       });
@@ -234,6 +282,10 @@ export class UIManager {
         coal: '🪨',
         steel: '🔩',
         food: '🌾',
+        ore: '⛏️',
+        stone: '🪨',
+        planks: '📏',
+        metal: '🔩',
         // Add more as needed
       };
       

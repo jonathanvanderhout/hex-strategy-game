@@ -622,6 +622,7 @@
             }
 
             // Place the building
+            // TODO: make a list of just the hubs for checking resource costs 
             gameState.placed_buildings[tileKey] = {
               type: uiManager.getSelectedBuilding(), // 'farm', 'lumberyard', etc.
               col: element.col,
@@ -638,7 +639,7 @@
               gameState.placed_buildings[tileKey].inventory.inputs = {wood: 100, food: 300, steel: 300}
             }
 
-            console.log("🏢 BUILDING PLACED", {
+            console.log("BUILDING PLACED", {
               type: buildingDef.name,
               emoji: buildingDef.emoji,
               tileKey,

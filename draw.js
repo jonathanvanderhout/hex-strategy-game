@@ -77,7 +77,7 @@ function drawHexBatch(ctx, hexes, terrain, size, zoom, showLabels) {
     ctx.textBaseline = "middle";
 
     hexes.forEach(({ screenX, screenY, col, row }) => {
-      ctx.fillText(`${col},${row}`, screenX, screenY);
+      // ctx.fillText(`${col},${row}`, screenX, screenY);
     });
   }
 }
@@ -114,7 +114,7 @@ function drawHoveredHex(
     ctx.font = `${12 * zoom}px Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${col},${row}`, centerX, centerY);
+    // ctx.fillText(`${col},${row}`, centerX, centerY);
   }
 }
 
