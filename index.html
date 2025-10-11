@@ -1033,7 +1033,8 @@
         }
 
         // Reinitialize visible map with new terrain
-        initializeVisibleMap();
+        initializeVisibleMap(); ////
+        gameState.terrainConfig = getConfig()
 
         console.log("✅ World regenerated!");
       });
